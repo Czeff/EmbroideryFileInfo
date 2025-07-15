@@ -247,6 +247,181 @@ def get_color_name(r, g, b):
     else:
         return "Unknown"
 
+def analyze_stitch_details(pattern):
+    """Analyze detailed stitch information"""
+    stats = {
+        'total_stitches': len(pattern.stitches),
+        'stitch_commands': {},
+        'jump_count': 0,
+        'color_changes': 0,
+        'trims': 0,
+        'max_jump_distance': 0,
+        'avg_stitch_length': 0,
+        'total_thread_length': 0,
+        'stitch_density_analysis': {}
+    }
+    
+    if len(pattern.stitches) == 0:
+        return stats
+    
+    # Count different stitch types and calculate distances
+    prev_x, prev_y = None, None
+    stitch_distances = []
+    jump_distances = []
+    
+    for stitch in pattern.stitches:
+        if len(stitch) >= 3:
+            x, y, command = stitch[0], stitch[1], stitch[2]
+            
+            # Count command types
+            if command == pyembroidery.STITCH:
+                stats['stitch_commands']['Normal Stitch'] = stats['stitch_commands'].get('Normal Stitch', 0) + 1
+            elif command == pyembroidery.JUMP:
+                stats['jump_count'] += 1
+                stats['stitch_commands']['Jump'] = stats['stitch_commands'].get('Jump', 0) + 1
+            elif command == pyembroidery.COLOR_CHANGE:
+                stats['color_changes'] += 1
+                stats['stitch_commands']['Color Change'] = stats['stitch_commands'].get('Color Change', 0) + 1
+            elif command == pyembroidery.TRIM:
+                stats['trims'] += 1
+                stats['stitch_commands']['Trim'] = stats['stitch_commands'].get('Trim', 0) + 1
+            
+            # Calculate distances
+            if prev_x is not None and prev_y is not None:
+                distance = ((x - prev_x) ** 2 + (y - prev_y) ** 2) ** 0.5
+                
+                if command == pyembroidery.JUMP:
+                    jump_distances.append(distance)
+                    stats['max_jump_distance'] = max(stats['max_jump_distance'], distance)
+                elif command == pyembroidery.STITCH:
+                    stitch_distances.append(distance)
+                    stats['total_thread_length'] += distance
+            
+            prev_x, prev_y = x, y
+    
+    # Calculate averages
+    if stitch_distances:
+        stats['avg_stitch_length'] = round(sum(stitch_distances) / len(stitch_distances) / 10, 2)  # Convert to mm
+    
+    # Convert thread length to mm and then to more readable units
+    stats['total_thread_length'] = round(stats['total_thread_length'] / 10, 2)  # mm
+    if stats['total_thread_length'] > 1000:
+        stats['total_thread_length_m'] = round(stats['total_thread_length'] / 1000, 2)
+    
+    # Convert max jump distance to mm
+    stats['max_jump_distance'] = round(stats['max_jump_distance'] / 10, 2)
+    
+    return stats
+
+def analyze_technical_specs(pattern, dimensions):
+    """Analyze technical specifications"""
+    tech_info = {
+        'file_format': getattr(pattern, 'format', 'Unknown'),
+        'metadata': {},
+        'software_info': {},
+        'creation_date': None,
+        'machine_info': {},
+        'pattern_complexity': 'Unknown'
+    }
+    
+    # Extract metadata if available
+    if hasattr(pattern, 'extras') and pattern.extras:
+        for key, value in pattern.extras.items():
+            if 'author' in key.lower():
+                tech_info['metadata']['author'] = value
+            elif 'title' in key.lower():
+                tech_info['metadata']['title'] = value
+            elif 'created' in key.lower() or 'date' in key.lower():
+                tech_info['creation_date'] = value
+            elif 'software' in key.lower() or 'program' in key.lower():
+                tech_info['software_info']['name'] = value
+            elif 'version' in key.lower():
+                tech_info['software_info']['version'] = value
+            elif 'machine' in key.lower():
+                tech_info['machine_info']['type'] = value
+            elif 'hoop' in key.lower():
+                tech_info['machine_info']['hoop_size'] = value
+    
+    # Analyze pattern complexity
+    if len(pattern.stitches) > 0:
+        stitch_count = len(pattern.stitches)
+        color_count = len(pattern.threadlist)
+        
+        if stitch_count < 1000 and color_count <= 2:
+            tech_info['pattern_complexity'] = 'Proste (Simple)'
+        elif stitch_count < 5000 and color_count <= 5:
+            tech_info['pattern_complexity'] = 'Średnie (Medium)'
+        elif stitch_count < 15000 and color_count <= 10:
+            tech_info['pattern_complexity'] = 'Złożone (Complex)'
+        else:
+            tech_info['pattern_complexity'] = 'Bardzo złożone (Very Complex)'
+    
+    return tech_info
+
+def calculate_performance_metrics(pattern, dimensions):
+    """Calculate performance and time metrics"""
+    metrics = {
+        'estimated_time': {},
+        'stitch_density': 0,
+        'thread_efficiency': 0,
+        'color_efficiency': 0,
+        'recommended_speed': 'Unknown'
+    }
+    
+    if len(pattern.stitches) == 0 or not dimensions:
+        return metrics
+    
+    stitch_count = len(pattern.stitches)
+    area = dimensions['width'] * dimensions['height']  # mm²
+    
+    # Calculate stitch density (stitches per cm²)
+    if area > 0:
+        metrics['stitch_density'] = round(stitch_count / (area / 100), 1)  # Convert mm² to cm²
+    
+    # Estimate embroidery time (rough calculation)
+    # Average machine speed: 400-800 stitches per minute
+    # Factor in color changes, trims, and jumps
+    base_time_minutes = stitch_count / 600  # Conservative estimate
+    
+    # Add time for color changes and trims
+    color_changes = sum(1 for stitch in pattern.stitches if len(stitch) >= 3 and stitch[2] == pyembroidery.COLOR_CHANGE)
+    trims = sum(1 for stitch in pattern.stitches if len(stitch) >= 3 and stitch[2] == pyembroidery.TRIM)
+    
+    # Each color change adds ~30 seconds, each trim adds ~10 seconds
+    additional_time = (color_changes * 0.5) + (trims * 0.17)
+    
+    total_time_minutes = base_time_minutes + additional_time
+    
+    if total_time_minutes < 60:
+        metrics['estimated_time']['total'] = f"{round(total_time_minutes)} minut"
+    else:
+        hours = int(total_time_minutes // 60)
+        minutes = int(total_time_minutes % 60)
+        metrics['estimated_time']['total'] = f"{hours}h {minutes}min"
+    
+    metrics['estimated_time']['stitching'] = f"{round(base_time_minutes)} minut"
+    metrics['estimated_time']['setup'] = f"{round(additional_time * 60)} sekund"
+    
+    # Thread efficiency (lower jump-to-stitch ratio is better)
+    jumps = sum(1 for stitch in pattern.stitches if len(stitch) >= 3 and stitch[2] == pyembroidery.JUMP)
+    if stitch_count > 0:
+        metrics['thread_efficiency'] = round((1 - jumps / stitch_count) * 100, 1)
+    
+    # Color efficiency (fewer color changes relative to colors used is better)
+    color_count = len(pattern.threadlist)
+    if color_count > 0:
+        metrics['color_efficiency'] = round(max(0, 100 - (color_changes / color_count) * 10), 1)
+    
+    # Recommended speed based on complexity
+    if metrics['stitch_density'] > 8:
+        metrics['recommended_speed'] = 'Wolno (400-500 ściegów/min)'
+    elif metrics['stitch_density'] > 4:
+        metrics['recommended_speed'] = 'Średnio (500-650 ściegów/min)'
+    else:
+        metrics['recommended_speed'] = 'Szybko (650-800 ściegów/min)'
+    
+    return metrics
+
 def convert_pxf_to_dst(pxf_file_path):
     """Convert PXF file to DST format for detailed analysis"""
     try:
@@ -339,7 +514,10 @@ def analyze_embroidery_file(file_path):
             'stitch_types': [],
             'layers': [],
             'dimensions': None,
-            'converted_from_pxf': getattr(pattern, 'converted_from_pxf', False)
+            'converted_from_pxf': getattr(pattern, 'converted_from_pxf', False),
+            'detailed_stats': {},
+            'technical_info': {},
+            'performance_metrics': {}
         }
         
         # Extract thread colors
@@ -390,6 +568,18 @@ def analyze_embroidery_file(file_path):
                 'max_x': round(extends[2] / 10, 2),
                 'max_y': round(extends[3] / 10, 2)
             }
+        
+        # Detailed stitch analysis
+        stitch_stats = analyze_stitch_details(pattern)
+        analysis['detailed_stats'] = stitch_stats
+        
+        # Technical information
+        tech_info = analyze_technical_specs(pattern, analysis['dimensions'])
+        analysis['technical_info'] = tech_info
+        
+        # Performance metrics
+        performance = calculate_performance_metrics(pattern, analysis['dimensions'])
+        analysis['performance_metrics'] = performance
         
         # Try to extract layer information (if available)
         # Note: Layer information might not be available in all PXF files

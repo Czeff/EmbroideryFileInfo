@@ -372,6 +372,225 @@
             </div>
         </div>
 
+        <!-- Advanced Technical Analysis -->
+        {% if analysis.detailed_stats and not analysis.raw_analysis %}
+        <div class="row mb-4">
+            <div class="col">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title mb-0">
+                            <i class="fas fa-chart-bar me-2"></i>
+                            Szczegółowa analiza ściegów
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <td><strong>Całkowita liczba ściegów:</strong></td>
+                                            <td>{{ "{:,}".format(analysis.detailed_stats.total_stitches) }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Przeskoków:</strong></td>
+                                            <td>{{ "{:,}".format(analysis.detailed_stats.jump_count) }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Zmian koloru:</strong></td>
+                                            <td>{{ analysis.detailed_stats.color_changes }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Przycięć:</strong></td>
+                                            <td>{{ analysis.detailed_stats.trims }}</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <td><strong>Średnia długość ściegu:</strong></td>
+                                            <td>{{ analysis.detailed_stats.avg_stitch_length }} mm</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Maksymalny przeskok:</strong></td>
+                                            <td>{{ analysis.detailed_stats.max_jump_distance }} mm</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Całkowita długość nici:</strong></td>
+                                            <td>
+                                                {% if analysis.detailed_stats.total_thread_length_m %}
+                                                    {{ analysis.detailed_stats.total_thread_length_m }} m
+                                                {% else %}
+                                                    {{ analysis.detailed_stats.total_thread_length }} mm
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Technical Specifications -->
+        {% if analysis.technical_info and not analysis.raw_analysis %}
+        <div class="row mb-4">
+            <div class="col">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title mb-0">
+                            <i class="fas fa-cogs me-2"></i>
+                            Specyfikacje techniczne
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <td><strong>Format pliku:</strong></td>
+                                            <td>{{ analysis.technical_info.file_format }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Złożoność wzoru:</strong></td>
+                                            <td>{{ analysis.technical_info.pattern_complexity }}</td>
+                                        </tr>
+                                        {% if analysis.technical_info.creation_date %}
+                                        <tr>
+                                            <td><strong>Data utworzenia:</strong></td>
+                                            <td>{{ analysis.technical_info.creation_date }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if analysis.technical_info.software_info.name %}
+                                        <tr>
+                                            <td><strong>Oprogramowanie:</strong></td>
+                                            <td>{{ analysis.technical_info.software_info.name }}</td>
+                                        </tr>
+                                        {% endif %}
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        {% if analysis.technical_info.metadata.author %}
+                                        <tr>
+                                            <td><strong>Autor:</strong></td>
+                                            <td>{{ analysis.technical_info.metadata.author }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if analysis.technical_info.metadata.title %}
+                                        <tr>
+                                            <td><strong>Tytuł:</strong></td>
+                                            <td>{{ analysis.technical_info.metadata.title }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if analysis.technical_info.machine_info.type %}
+                                        <tr>
+                                            <td><strong>Typ maszyny:</strong></td>
+                                            <td>{{ analysis.technical_info.machine_info.type }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if analysis.technical_info.machine_info.hoop_size %}
+                                        <tr>
+                                            <td><strong>Rozmiar tamborka:</strong></td>
+                                            <td>{{ analysis.technical_info.machine_info.hoop_size }}</td>
+                                        </tr>
+                                        {% endif %}
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Performance Metrics -->
+        {% if analysis.performance_metrics and not analysis.raw_analysis %}
+        <div class="row mb-4">
+            <div class="col">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title mb-0">
+                            <i class="fas fa-tachometer-alt me-2"></i>
+                            Metryki wydajności i szacowany czas
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <td><strong>Gęstość ściegów:</strong></td>
+                                            <td>{{ analysis.performance_metrics.stitch_density }} ściegów/cm²</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Efektywność nici:</strong></td>
+                                            <td>{{ analysis.performance_metrics.thread_efficiency }}%</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Efektywność kolorów:</strong></td>
+                                            <td>{{ analysis.performance_metrics.color_efficiency }}%</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Zalecana prędkość:</strong></td>
+                                            <td>{{ analysis.performance_metrics.recommended_speed }}</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <tr>
+                                            <td><strong>Szacowany czas całkowity:</strong></td>
+                                            <td>{{ analysis.performance_metrics.estimated_time.total }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Czas haftowania:</strong></td>
+                                            <td>{{ analysis.performance_metrics.estimated_time.stitching }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Czas przygotowań:</strong></td>
+                                            <td>{{ analysis.performance_metrics.estimated_time.setup }}</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Performance Indicators -->
+                        <div class="row mt-3">
+                            <div class="col">
+                                <h6 class="mb-2">Wskaźniki wydajności:</h6>
+                                <div class="progress mb-2">
+                                    <div class="progress-bar bg-success" role="progressbar" style="width: {{ analysis.performance_metrics.thread_efficiency }}%">
+                                        Efektywność nici: {{ analysis.performance_metrics.thread_efficiency }}%
+                                    </div>
+                                </div>
+                                <div class="progress">
+                                    <div class="progress-bar bg-info" role="progressbar" style="width: {{ analysis.performance_metrics.color_efficiency }}%">
+                                        Efektywność kolorów: {{ analysis.performance_metrics.color_efficiency }}%
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Action Buttons -->
         <div class="row">
             <div class="col text-center">
