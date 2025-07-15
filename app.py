@@ -45,7 +45,10 @@ def try_pxf_analysis(file_path):
             'layers': [],
             'dimensions': None,
             'raw_analysis': True,
-            'detailed_info': {}
+            'detailed_info': {},
+            'embroidery_parameters': {},
+            'stitch_techniques': {},
+            'machine_settings': {}
         }
         
         # Advanced binary analysis for more detailed extraction
@@ -205,6 +208,18 @@ def try_pxf_analysis(file_path):
                     else:
                         detailed_info['estimated_thread_length'] = f"{estimated_length:.0f} cm"
                 
+                # Extract embroidery parameters from PXF file
+                embroidery_params = extract_pxf_embroidery_parameters(data)
+                analysis['embroidery_parameters'] = embroidery_params
+                
+                # Extract stitch techniques
+                stitch_techniques = extract_pxf_stitch_techniques(data)
+                analysis['stitch_techniques'] = stitch_techniques
+                
+                # Extract machine settings
+                machine_settings = extract_pxf_machine_settings(data)
+                analysis['machine_settings'] = machine_settings
+                
             except Exception as e:
                 logging.warning(f"Error in advanced PXF analysis: {e}")
         
@@ -220,6 +235,305 @@ def try_pxf_analysis(file_path):
     except Exception as e:
         logging.error(f"Error in PXF binary analysis: {e}")
         return None
+
+def extract_pxf_embroidery_parameters(data):
+    """Extract embroidery parameters from PXF file"""
+    params = {
+        'stitch_density': 'Unknown',
+        'underlay_type': 'Unknown',
+        'pull_compensation': 'Unknown',
+        'push_compensation': 'Unknown',
+        'stitch_angle': 'Unknown',
+        'fill_pattern': 'Unknown',
+        'outline_width': 'Unknown',
+        'automatic_underlay': 'Unknown',
+        'density_settings': {}
+    }
+    
+    try:
+        # Look for density settings in PXF files
+        # PXF stores density information in specific byte patterns
+        for i in range(0, len(data) - 16):
+            chunk = data[i:i+16]
+            
+            # Look for density markers (common in Tajima PXF files)
+            if b'DENSITY' in chunk or b'density' in chunk:
+                try:
+                    # Try to extract density value from surrounding bytes
+                    density_bytes = data[i+8:i+12]
+                    if len(density_bytes) == 4:
+                        import struct
+                        density_val = struct.unpack('<I', density_bytes)[0]
+                        if 10 <= density_val <= 1000:  # Reasonable density range
+                            params['stitch_density'] = f"{density_val/100:.1f} mm"
+                except:
+                    pass
+            
+            # Look for underlay settings
+            if b'UNDERLAY' in chunk or b'underlay' in chunk:
+                underlay_info = data[i:i+50].decode('utf-8', errors='ignore')
+                if 'AUTO' in underlay_info:
+                    params['automatic_underlay'] = 'Enabled'
+                    params['underlay_type'] = 'Automatic'
+                elif 'ZIGZAG' in underlay_info:
+                    params['underlay_type'] = 'Zigzag'
+                elif 'EDGE' in underlay_info:
+                    params['underlay_type'] = 'Edge Run'
+                elif 'CENTER' in underlay_info:
+                    params['underlay_type'] = 'Center Run'
+            
+            # Look for pull compensation settings
+            if b'PULL' in chunk or b'pull' in chunk:
+                try:
+                    comp_bytes = data[i+4:i+8]
+                    if len(comp_bytes) >= 2:
+                        comp_val = struct.unpack('<H', comp_bytes[:2])[0]
+                        if 0 <= comp_val <= 100:
+                            params['pull_compensation'] = f"{comp_val/10:.1f}%"
+                except:
+                    pass
+            
+            # Look for fill pattern information
+            if b'FILL' in chunk or b'fill' in chunk:
+                fill_info = data[i:i+30].decode('utf-8', errors='ignore')
+                if 'SATIN' in fill_info:
+                    params['fill_pattern'] = 'Satin'
+                elif 'ZIGZAG' in fill_info:
+                    params['fill_pattern'] = 'Zigzag'
+                elif 'CROSS' in fill_info:
+                    params['fill_pattern'] = 'Cross Hatch'
+                elif 'TATAMI' in fill_info:
+                    params['fill_pattern'] = 'Tatami'
+        
+        # Extract angle information from stitch patterns
+        angle_found = False
+        for i in range(0, len(data) - 8, 4):
+            try:
+                # Look for angle patterns in coordinate data
+                if i + 8 < len(data):
+                    x1 = struct.unpack('<h', data[i:i+2])[0]
+                    y1 = struct.unpack('<h', data[i+2:i+4])[0]
+                    x2 = struct.unpack('<h', data[i+4:i+6])[0]
+                    y2 = struct.unpack('<h', data[i+6:i+8])[0]
+                    
+                    if all(abs(val) < 10000 for val in [x1, y1, x2, y2]):
+                        # Calculate angle if we have valid coordinates
+                        import math
+                        if x2 != x1 and not angle_found:
+                            angle = math.degrees(math.atan2(y2 - y1, x2 - x1))
+                            if -180 <= angle <= 180:
+                                params['stitch_angle'] = f"{angle:.0f}°"
+                                angle_found = True
+                                break
+            except:
+                continue
+                
+    except Exception as e:
+        logging.warning(f"Error extracting embroidery parameters: {e}")
+    
+    return params
+
+def extract_pxf_stitch_techniques(data):
+    """Extract stitch techniques from PXF file"""
+    techniques = {
+        'fill_techniques': [],
+        'outline_techniques': [],
+        'special_effects': [],
+        'stitch_types_used': [],
+        'density_variations': []
+    }
+    
+    try:
+        # Analyze stitch patterns to determine techniques
+        stitch_patterns = []
+        for i in range(0, len(data) - 12, 4):
+            try:
+                x = struct.unpack('<h', data[i:i+2])[0]
+                y = struct.unpack('<h', data[i+2:i+4])[0]
+                if abs(x) < 10000 and abs(y) < 10000:
+                    stitch_patterns.append((x, y))
+            except:
+                continue
+        
+        if len(stitch_patterns) > 10:
+            # Analyze patterns to determine techniques
+            distances = []
+            angles = []
+            
+            for i in range(1, min(len(stitch_patterns), 1000)):
+                x1, y1 = stitch_patterns[i-1]
+                x2, y2 = stitch_patterns[i]
+                
+                distance = math.sqrt((x2-x1)**2 + (y2-y1)**2)
+                distances.append(distance)
+                
+                if x2 != x1:
+                    angle = math.degrees(math.atan2(y2-y1, x2-x1))
+                    angles.append(angle)
+            
+            # Determine fill techniques based on patterns
+            if distances:
+                avg_distance = sum(distances) / len(distances)
+                distance_variance = sum((d - avg_distance)**2 for d in distances) / len(distances)
+                
+                if distance_variance < 100:  # Low variance = consistent spacing
+                    techniques['fill_techniques'].append('Uniform Fill')
+                else:
+                    techniques['fill_techniques'].append('Variable Density Fill')
+                
+                if avg_distance < 50:  # Close stitches
+                    techniques['stitch_types_used'].append('Dense Satin')
+                elif avg_distance < 200:
+                    techniques['stitch_types_used'].append('Normal Fill')
+                else:
+                    techniques['stitch_types_used'].append('Open Fill')
+            
+            # Analyze angles for patterns
+            if angles:
+                angle_changes = sum(1 for i in range(1, len(angles)) if abs(angles[i] - angles[i-1]) > 45)
+                if angle_changes > len(angles) * 0.3:
+                    techniques['fill_techniques'].append('Cross Hatch')
+                    techniques['special_effects'].append('Multi-directional Fill')
+                else:
+                    techniques['fill_techniques'].append('Directional Fill')
+        
+        # Look for specific technique markers in the file
+        technique_markers = {
+            b'SATIN': 'Satin Stitch',
+            b'ZIGZAG': 'Zigzag Fill',
+            b'TATAMI': 'Tatami Fill',
+            b'CROSS': 'Cross Hatch',
+            b'OUTLINE': 'Outline Stitch',
+            b'BEAN': 'Bean Stitch',
+            b'STEM': 'Stem Stitch',
+            b'CHAIN': 'Chain Stitch',
+            b'BLANKET': 'Blanket Stitch',
+            b'APPLIQUE': 'Applique',
+            b'MOTIF': 'Motif Fill',
+            b'RADIAL': 'Radial Fill',
+            b'SPIRAL': 'Spiral Fill',
+            b'CONTOUR': 'Contour Fill'
+        }
+        
+        for marker, technique in technique_markers.items():
+            if marker in data:
+                if 'FILL' in marker.decode() or 'TATAMI' in marker.decode():
+                    techniques['fill_techniques'].append(technique)
+                elif 'OUTLINE' in marker.decode() or 'STEM' in marker.decode():
+                    techniques['outline_techniques'].append(technique)
+                else:
+                    techniques['special_effects'].append(technique)
+        
+        # Remove duplicates
+        for key in techniques:
+            if isinstance(techniques[key], list):
+                techniques[key] = list(set(techniques[key]))
+                
+    except Exception as e:
+        logging.warning(f"Error extracting stitch techniques: {e}")
+    
+    return techniques
+
+def extract_pxf_machine_settings(data):
+    """Extract machine settings from PXF file"""
+    settings = {
+        'speed_settings': 'Unknown',
+        'tension_settings': 'Unknown',
+        'needle_settings': 'Unknown',
+        'hoop_size': 'Unknown',
+        'machine_type': 'Unknown',
+        'thread_trimming': 'Unknown',
+        'color_sequence': 'Unknown',
+        'jump_settings': {}
+    }
+    
+    try:
+        # Look for machine-specific settings
+        for i in range(0, len(data) - 32):
+            chunk = data[i:i+32]
+            
+            # Look for speed settings
+            if b'SPEED' in chunk or b'speed' in chunk:
+                try:
+                    speed_bytes = data[i+8:i+12]
+                    if len(speed_bytes) >= 2:
+                        speed = struct.unpack('<H', speed_bytes[:2])[0]
+                        if 100 <= speed <= 2000:  # Reasonable speed range
+                            settings['speed_settings'] = f"{speed} stitches/min"
+                except:
+                    pass
+            
+            # Look for tension settings
+            if b'TENSION' in chunk or b'tension' in chunk:
+                try:
+                    tension_bytes = data[i+8:i+12]
+                    if len(tension_bytes) >= 2:
+                        tension = struct.unpack('<H', tension_bytes[:2])[0]
+                        if 1 <= tension <= 100:
+                            settings['tension_settings'] = f"Level {tension}"
+                except:
+                    pass
+            
+            # Look for hoop size information
+            if b'HOOP' in chunk or b'hoop' in chunk:
+                hoop_info = data[i:i+50].decode('utf-8', errors='ignore')
+                hoop_sizes = ['100x100', '130x180', '150x240', '200x300', '360x200']
+                for size in hoop_sizes:
+                    if size in hoop_info:
+                        settings['hoop_size'] = f"{size} mm"
+                        break
+            
+            # Look for machine type
+            if b'TAJIMA' in chunk:
+                settings['machine_type'] = 'Tajima'
+            elif b'BROTHER' in chunk:
+                settings['machine_type'] = 'Brother'
+            elif b'BERNINA' in chunk:
+                settings['machine_type'] = 'Bernina'
+            elif b'HUSQVARNA' in chunk:
+                settings['machine_type'] = 'Husqvarna Viking'
+            elif b'JANOME' in chunk:
+                settings['machine_type'] = 'Janome'
+            elif b'PFAFF' in chunk:
+                settings['machine_type'] = 'Pfaff'
+            
+            # Look for trimming settings
+            if b'TRIM' in chunk or b'trim' in chunk:
+                trim_info = data[i:i+30].decode('utf-8', errors='ignore')
+                if 'AUTO' in trim_info:
+                    settings['thread_trimming'] = 'Automatic'
+                elif 'MANUAL' in trim_info:
+                    settings['thread_trimming'] = 'Manual'
+        
+        # Analyze jump settings
+        jump_distances = []
+        for i in range(0, len(data) - 8, 4):
+            try:
+                x1 = struct.unpack('<h', data[i:i+2])[0]
+                y1 = struct.unpack('<h', data[i+2:i+4])[0]
+                x2 = struct.unpack('<h', data[i+4:i+6])[0]
+                y2 = struct.unpack('<h', data[i+6:i+8])[0]
+                
+                if all(abs(val) < 10000 for val in [x1, y1, x2, y2]):
+                    distance = math.sqrt((x2-x1)**2 + (y2-y1)**2)
+                    if distance > 500:  # Likely a jump
+                        jump_distances.append(distance)
+            except:
+                continue
+        
+        if jump_distances:
+            avg_jump = sum(jump_distances) / len(jump_distances)
+            max_jump = max(jump_distances)
+            settings['jump_settings'] = {
+                'average_jump': f"{avg_jump/10:.1f} mm",
+                'max_jump': f"{max_jump/10:.1f} mm",
+                'jump_count': len(jump_distances)
+            }
+            
+    except Exception as e:
+        logging.warning(f"Error extracting machine settings: {e}")
+    
+    return settings
 
 def get_color_name(r, g, b):
     """Get approximate color name from RGB values"""

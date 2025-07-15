@@ -202,6 +202,226 @@
         </div>
         {% endif %}
 
+        <!-- Embroidery Parameters (PXF) -->
+        {% if analysis.raw_analysis and analysis.embroidery_parameters %}
+        <div class="row mb-4">
+            <div class="col">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title mb-0">
+                            <i class="fas fa-sliders-h me-2"></i>
+                            Parametry haftu
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        {% if analysis.embroidery_parameters.stitch_density != 'Unknown' %}
+                                        <tr>
+                                            <td><strong>Gęstość ściegów:</strong></td>
+                                            <td>{{ analysis.embroidery_parameters.stitch_density }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if analysis.embroidery_parameters.underlay_type != 'Unknown' %}
+                                        <tr>
+                                            <td><strong>Typ podkładu:</strong></td>
+                                            <td>{{ analysis.embroidery_parameters.underlay_type }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if analysis.embroidery_parameters.automatic_underlay != 'Unknown' %}
+                                        <tr>
+                                            <td><strong>Automatyczny podkład:</strong></td>
+                                            <td>{{ analysis.embroidery_parameters.automatic_underlay }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if analysis.embroidery_parameters.pull_compensation != 'Unknown' %}
+                                        <tr>
+                                            <td><strong>Kompensacja ściągania:</strong></td>
+                                            <td>{{ analysis.embroidery_parameters.pull_compensation }}</td>
+                                        </tr>
+                                        {% endif %}
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        {% if analysis.embroidery_parameters.fill_pattern != 'Unknown' %}
+                                        <tr>
+                                            <td><strong>Wzór wypełnienia:</strong></td>
+                                            <td>{{ analysis.embroidery_parameters.fill_pattern }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if analysis.embroidery_parameters.stitch_angle != 'Unknown' %}
+                                        <tr>
+                                            <td><strong>Kąt ściegów:</strong></td>
+                                            <td>{{ analysis.embroidery_parameters.stitch_angle }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if analysis.embroidery_parameters.outline_width != 'Unknown' %}
+                                        <tr>
+                                            <td><strong>Szerokość obrysu:</strong></td>
+                                            <td>{{ analysis.embroidery_parameters.outline_width }}</td>
+                                        </tr>
+                                        {% endif %}
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Stitch Techniques (PXF) -->
+        {% if analysis.raw_analysis and analysis.stitch_techniques %}
+        <div class="row mb-4">
+            <div class="col">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title mb-0">
+                            <i class="fas fa-magic me-2"></i>
+                            Techniki haftu
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="text-primary">Techniki wypełnień:</h6>
+                                {% if analysis.stitch_techniques.fill_techniques %}
+                                <ul class="list-unstyled">
+                                    {% for technique in analysis.stitch_techniques.fill_techniques %}
+                                    <li><i class="fas fa-check text-success me-2"></i>{{ technique }}</li>
+                                    {% endfor %}
+                                </ul>
+                                {% else %}
+                                <p class="text-muted">Brak informacji</p>
+                                {% endif %}
+                                
+                                <h6 class="text-primary mt-3">Techniki obrysów:</h6>
+                                {% if analysis.stitch_techniques.outline_techniques %}
+                                <ul class="list-unstyled">
+                                    {% for technique in analysis.stitch_techniques.outline_techniques %}
+                                    <li><i class="fas fa-check text-success me-2"></i>{{ technique }}</li>
+                                    {% endfor %}
+                                </ul>
+                                {% else %}
+                                <p class="text-muted">Brak informacji</p>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-primary">Rodzaje ściegów:</h6>
+                                {% if analysis.stitch_techniques.stitch_types_used %}
+                                <ul class="list-unstyled">
+                                    {% for type in analysis.stitch_techniques.stitch_types_used %}
+                                    <li><i class="fas fa-check text-success me-2"></i>{{ type }}</li>
+                                    {% endfor %}
+                                </ul>
+                                {% else %}
+                                <p class="text-muted">Brak informacji</p>
+                                {% endif %}
+                                
+                                <h6 class="text-primary mt-3">Efekty specjalne:</h6>
+                                {% if analysis.stitch_techniques.special_effects %}
+                                <ul class="list-unstyled">
+                                    {% for effect in analysis.stitch_techniques.special_effects %}
+                                    <li><i class="fas fa-star text-warning me-2"></i>{{ effect }}</li>
+                                    {% endfor %}
+                                </ul>
+                                {% else %}
+                                <p class="text-muted">Brak informacji</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Machine Settings (PXF) -->
+        {% if analysis.raw_analysis and analysis.machine_settings %}
+        <div class="row mb-4">
+            <div class="col">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title mb-0">
+                            <i class="fas fa-cog me-2"></i>
+                            Ustawienia maszyny
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        {% if analysis.machine_settings.machine_type != 'Unknown' %}
+                                        <tr>
+                                            <td><strong>Typ maszyny:</strong></td>
+                                            <td>{{ analysis.machine_settings.machine_type }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if analysis.machine_settings.speed_settings != 'Unknown' %}
+                                        <tr>
+                                            <td><strong>Prędkość:</strong></td>
+                                            <td>{{ analysis.machine_settings.speed_settings }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if analysis.machine_settings.tension_settings != 'Unknown' %}
+                                        <tr>
+                                            <td><strong>Naprężenie nici:</strong></td>
+                                            <td>{{ analysis.machine_settings.tension_settings }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if analysis.machine_settings.hoop_size != 'Unknown' %}
+                                        <tr>
+                                            <td><strong>Rozmiar tamborka:</strong></td>
+                                            <td>{{ analysis.machine_settings.hoop_size }}</td>
+                                        </tr>
+                                        {% endif %}
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        {% if analysis.machine_settings.thread_trimming != 'Unknown' %}
+                                        <tr>
+                                            <td><strong>Przycinanie nici:</strong></td>
+                                            <td>{{ analysis.machine_settings.thread_trimming }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if analysis.machine_settings.jump_settings.average_jump %}
+                                        <tr>
+                                            <td><strong>Średni przeskok:</strong></td>
+                                            <td>{{ analysis.machine_settings.jump_settings.average_jump }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if analysis.machine_settings.jump_settings.max_jump %}
+                                        <tr>
+                                            <td><strong>Maksymalny przeskok:</strong></td>
+                                            <td>{{ analysis.machine_settings.jump_settings.max_jump }}</td>
+                                        </tr>
+                                        {% endif %}
+                                        {% if analysis.machine_settings.jump_settings.jump_count %}
+                                        <tr>
+                                            <td><strong>Liczba przeskoków:</strong></td>
+                                            <td>{{ analysis.machine_settings.jump_settings.jump_count }}</td>
+                                        </tr>
+                                        {% endif %}
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Pattern Dimensions -->
         {% if analysis.dimensions %}
         <div class="row mb-4">
