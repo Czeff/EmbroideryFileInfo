@@ -46,6 +46,20 @@
                 </div>
             </div>
         </div>
+        {% elif analysis.converted_from_pxf %}
+        <div class="row mb-4">
+            <div class="col">
+                <div class="alert alert-success">
+                    <h5 class="alert-heading">
+                        <i class="fas fa-check-circle me-2"></i>
+                        Konwersja automatyczna zakończona pomyślnie
+                    </h5>
+                    <p class="mb-0">
+                        Plik PXF został automatycznie skonwertowany do formatu DST w celu uzyskania szczegółowych informacji o wzorze haftu.
+                    </p>
+                </div>
+            </div>
+        </div>
         {% endif %}
 
         <!-- Summary Cards -->

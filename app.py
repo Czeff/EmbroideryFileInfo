@@ -109,6 +109,28 @@ def try_pxf_analysis(file_path):
         logging.error(f"Error in PXF binary analysis: {e}")
         return None
 
+def convert_pxf_to_dst(pxf_file_path):
+    """Convert PXF file to DST format for detailed analysis"""
+    try:
+        # Create temporary DST file
+        dst_file_path = pxf_file_path.replace('.pxf', '_converted.dst')
+        
+        # Try to read and convert the PXF file
+        pattern = pyembroidery.read(pxf_file_path)
+        
+        if pattern is not None and len(pattern.stitches) > 0:
+            # Write as DST file
+            pyembroidery.write_dst(pattern, dst_file_path)
+            logging.info(f"Successfully converted PXF to DST: {dst_file_path}")
+            return dst_file_path
+        else:
+            logging.warning("PXF file has no stitch data to convert")
+            return None
+            
+    except Exception as e:
+        logging.error(f"Error converting PXF to DST: {e}")
+        return None
+
 def analyze_embroidery_file(file_path):
     """Analyze embroidery file using multiple approaches"""
     try:
@@ -129,20 +151,44 @@ def analyze_embroidery_file(file_path):
         pattern = pyembroidery.read(file_path)
         
         if pattern is None and file_ext == '.pxf':
-            # For PXF files, try alternative analysis approaches
-            pxf_analysis = try_pxf_analysis(file_path)
-            if pxf_analysis:
-                return pxf_analysis, None
+            # For PXF files that failed to read, try conversion first
+            logging.info("Attempting PXF to DST conversion for detailed analysis")
+            dst_file = convert_pxf_to_dst(file_path)
             
-            # If alternative analysis fails, check the header for error type
-            with open(file_path, 'rb') as f:
-                header = f.read(32)
-                logging.info(f"File header (first 32 bytes): {header}")
+            if dst_file and os.path.exists(dst_file):
+                # Try to analyze the converted DST file
+                pattern = pyembroidery.read(dst_file)
+                if pattern is not None:
+                    logging.info("Successfully converted and analyzed PXF file")
+                    # Mark that this was converted for the template
+                    pattern.converted_from_pxf = True
+                    # Clean up the temporary DST file
+                    try:
+                        os.unlink(dst_file)
+                    except:
+                        pass
+                else:
+                    # Clean up failed conversion
+                    try:
+                        os.unlink(dst_file)
+                    except:
+                        pass
             
-            if header.startswith(b'PMLPXF'):
-                return None, "pxf_unsupported_variant"
-            else:
-                return None, "pxf_invalid_structure"
+            # If conversion failed, try basic analysis
+            if pattern is None:
+                pxf_analysis = try_pxf_analysis(file_path)
+                if pxf_analysis:
+                    return pxf_analysis, None
+                
+                # If alternative analysis fails, check the header for error type
+                with open(file_path, 'rb') as f:
+                    header = f.read(32)
+                    logging.info(f"File header (first 32 bytes): {header}")
+                
+                if header.startswith(b'PMLPXF'):
+                    return None, "pxf_unsupported_variant"
+                else:
+                    return None, "pxf_invalid_structure"
         elif pattern is None:
             return None, f"Nie można odczytać pliku {file_ext}. Plik może być uszkodzony lub używać nieobsługiwanego wariantu formatu."
         
@@ -154,7 +200,8 @@ def analyze_embroidery_file(file_path):
             'colors': [],
             'stitch_types': [],
             'layers': [],
-            'dimensions': None
+            'dimensions': None,
+            'converted_from_pxf': getattr(pattern, 'converted_from_pxf', False)
         }
         
         # Extract thread colors
