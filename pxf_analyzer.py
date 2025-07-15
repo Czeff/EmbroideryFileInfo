@@ -245,18 +245,22 @@ class PXFAnalyzer:
         params = {}
         
         try:
-            # Przechowuje wszystkie znalezione parametry
+            # Przechowuje wszystkie znalezione parametry z większą szczegółowością
             all_parameters = {
                 'density_values': [],
                 'underlay_types': [],
                 'compensation_values': [],
                 'fill_angles': [],
                 'stitch_types': [],
-                'thread_tensions': []
+                'thread_tensions': [],
+                'stitch_lengths': [],
+                'machine_speeds': [],
+                'pull_compensations': [],
+                'auto_underlay_settings': []
             }
             
-            # Szukamy sekcji parametrów
-            for i in range(0, len(self.data) - 32):
+            # Szukamy sekcji parametrów z większą dokładnością
+            for i in range(0, len(self.data) - 32, 1):  # Analizujemy każdy bajt
                 chunk = self.data[i:i+32]
                 
                 # Parametry gęstości
@@ -331,6 +335,34 @@ class PXFAnalyzer:
                             all_parameters['thread_tensions'].append(tension)
                     except struct.error:
                         pass
+                
+                # Dodatkowe parametry długości ściegów
+                if b'STITCH_LENGTH' in chunk or b'LENGTH' in chunk:
+                    try:
+                        length = struct.unpack('<f', self.data[i+8:i+12])[0]
+                        if 0.1 <= length <= 10:  # Rozsądne długości ściegów w mm
+                            all_parameters['stitch_lengths'].append(length / 10.0)  # Konwersja na cm
+                    except struct.error:
+                        pass
+                
+                # Prędkość maszyny (dodatkowe wykrywanie)
+                if b'SPEED' in chunk or b'MACHINE_SPEED' in chunk:
+                    try:
+                        speed = struct.unpack('<I', self.data[i+8:i+12])[0]
+                        if 100 <= speed <= 2000:
+                            all_parameters['machine_speeds'].append(speed)
+                    except struct.error:
+                        pass
+                
+                # Automatyczny podkład
+                if b'AUTO_UNDERLAY' in chunk or b'AUTOMATIC' in chunk:
+                    try:
+                        auto_setting = struct.unpack('<I', self.data[i+8:i+12])[0]
+                        if auto_setting in [0, 1]:
+                            setting_name = 'Włączony' if auto_setting == 1 else 'Wyłączony'
+                            all_parameters['auto_underlay_settings'].append(setting_name)
+                    except struct.error:
+                        pass
             
             # Przetwarza zebrane parametry
             if all_parameters['density_values']:
@@ -370,6 +402,24 @@ class PXFAnalyzer:
                     params['thread_tension'] = f"Level {tensions[0]:.0f}"
                 else:
                     params['thread_tension'] = f"Level {min(tensions):.0f} - {max(tensions):.0f}"
+            
+            # Dodatkowe parametry
+            if all_parameters['stitch_lengths']:
+                lengths = all_parameters['stitch_lengths']
+                if len(lengths) == 1:
+                    params['stitch_length'] = f"{lengths[0]:.2f} cm"
+                else:
+                    params['stitch_length'] = f"{min(lengths):.2f} - {max(lengths):.2f} cm"
+            
+            if all_parameters['machine_speeds']:
+                speeds = all_parameters['machine_speeds']
+                if len(speeds) == 1:
+                    params['machine_speed'] = f"{speeds[0]} spm"
+                else:
+                    params['machine_speed'] = f"{min(speeds)} - {max(speeds)} spm"
+            
+            if all_parameters['auto_underlay_settings']:
+                params['auto_underlay'] = ', '.join(set(all_parameters['auto_underlay_settings']))
             
             # Dodaj informację o liczbie znalezionych parametrów
             total_params = sum(len(v) for v in all_parameters.values() if isinstance(v, list))
@@ -438,11 +488,12 @@ class PXFAnalyzer:
         """Analizuje dane ściegów z wykrywaniem wielu wzorów"""
         stitch_data = {}
         
-        # Szukamy współrzędnych ściegów
+        # Szukamy współrzędnych ściegów z większą precyzją
         coordinates = []
         patterns = []
         
-        for i in range(0, len(self.data) - 6, 2):
+        # Analizujemy większy zakres danych
+        for i in range(0, len(self.data) - 6, 1):  # Co 1 bajt zamiast co 2
             try:
                 x = struct.unpack('<h', self.data[i:i+2])[0]
                 y = struct.unpack('<h', self.data[i+2:i+4])[0]
@@ -451,7 +502,7 @@ class PXFAnalyzer:
                 if -32000 < x < 32000 and -32000 < y < 32000:
                     coordinates.append((x, y, cmd))
                     
-                    if len(coordinates) >= 5000:  # Zwiększamy limit dla lepszej analizy dużych plików
+                    if len(coordinates) >= 15000:  # Znacznie większy limit dla bardzo szczegółowej analizy
                         break
                         
             except struct.error:
@@ -529,8 +580,8 @@ class PXFAnalyzer:
         if current_pattern:
             patterns.append(current_pattern)
         
-        # Filtruj wzory które mają mniej niż 5 punktów (prawdopodobnie szum)
-        patterns = [p for p in patterns if len(p) >= 5]
+        # Filtruj wzory które mają mniej niż 3 punktów (bardziej agresywne wykrywanie)
+        patterns = [p for p in patterns if len(p) >= 3]
         
         # Jeśli wykryto wzory przez znaczniki końca, użyj ich
         if len(patterns) > 1:
@@ -595,8 +646,8 @@ class PXFAnalyzer:
         if current_pattern:
             patterns.append(current_pattern)
         
-        # Filtruj wzory które mają mniej niż 10 punktów
-        patterns = [p for p in patterns if len(p) >= 10]
+        # Filtruj wzory które mają mniej niż 5 punktów (mniej restrykcyjne)
+        patterns = [p for p in patterns if len(p) >= 5]
         
         return patterns if len(patterns) > 1 else [coordinates]
     
@@ -621,9 +672,9 @@ class PXFAnalyzer:
             }
         }
         
-        # Średnia długość ściegu
+        # Średnia długość ściegu (analizuj więcej punktów)
         distances = []
-        for i in range(1, min(len(coordinates), 500)):
+        for i in range(1, min(len(coordinates), 1500)):
             x1, y1, _ = coordinates[i-1]
             x2, y2, _ = coordinates[i]
             dist = ((x2-x1)**2 + (y2-y1)**2)**0.5
