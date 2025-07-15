@@ -264,7 +264,9 @@ class PXFAnalyzer:
                     try:
                         density = struct.unpack('<f', self.data[i+8:i+12])[0]
                         if 0.1 <= density <= 20:
-                            all_parameters['density_values'].append(density)
+                            # Konwertuj na cm
+                            density_cm = density / 10.0
+                            all_parameters['density_values'].append(density_cm)
                     except struct.error:
                         pass
                 
@@ -334,9 +336,9 @@ class PXFAnalyzer:
             if all_parameters['density_values']:
                 densities = all_parameters['density_values']
                 if len(densities) == 1:
-                    params['stitch_density'] = f"{densities[0]:.1f} mm"
+                    params['row_spacing'] = f"{densities[0]:.2f} cm"
                 else:
-                    params['stitch_density'] = f"{min(densities):.1f} - {max(densities):.1f} mm (różne wzory)"
+                    params['row_spacing'] = f"{min(densities):.2f} - {max(densities):.2f} cm (różne wzory)"
             
             if all_parameters['underlay_types']:
                 params['underlay_type'] = ', '.join(all_parameters['underlay_types'])
@@ -449,7 +451,7 @@ class PXFAnalyzer:
                 if -32000 < x < 32000 and -32000 < y < 32000:
                     coordinates.append((x, y, cmd))
                     
-                    if len(coordinates) >= 2000:  # Zwiększamy limit dla lepszej analizy
+                    if len(coordinates) >= 5000:  # Zwiększamy limit dla lepszej analizy dużych plików
                         break
                         
             except struct.error:
@@ -474,12 +476,12 @@ class PXFAnalyzer:
                 all_x = [c[0] for c in coordinates]
                 all_y = [c[1] for c in coordinates]
                 stitch_data['total_dimensions'] = {
-                    'width': (max(all_x) - min(all_x)) / 10.0,
-                    'height': (max(all_y) - min(all_y)) / 10.0,
-                    'x_min': min(all_x) / 10.0,
-                    'x_max': max(all_x) / 10.0,
-                    'y_min': min(all_y) / 10.0,
-                    'y_max': max(all_y) / 10.0
+                    'width': (max(all_x) - min(all_x)) / 100.0,  # Konwersja na cm
+                    'height': (max(all_y) - min(all_y)) / 100.0,  # Konwersja na cm
+                    'x_min': min(all_x) / 100.0,
+                    'x_max': max(all_x) / 100.0,
+                    'y_min': min(all_y) / 100.0,
+                    'y_max': max(all_y) / 100.0
                 }
             else:
                 # Pojedynczy wzór - standardowa analiza
@@ -516,7 +518,7 @@ class PXFAnalyzer:
             prev_x, prev_y, _ = coordinates[i-1]
             distance = ((x - prev_x)**2 + (y - prev_y)**2)**0.5
             
-            # Jeśli dystans > 50mm (500 jednostek), prawdopodobnie nowy wzór
+            # Jeśli dystans > 5cm (500 jednostek), prawdopodobnie nowy wzór
             if distance > 500 and len(current_pattern) > 10:
                 patterns.append(current_pattern)
                 current_pattern = [(x, y, cmd)]
@@ -583,7 +585,7 @@ class PXFAnalyzer:
             avg_distance = sum(distances) / len(distances) if distances else 0
             
             # Jeśli punkt jest bardzo daleko od reszty wzoru, zacznij nowy wzór
-            if avg_distance > 1000 and len(current_pattern) > 20:  # 100mm średnia odległość
+            if avg_distance > 1000 and len(current_pattern) > 20:  # 10cm średnia odległość
                 patterns.append(current_pattern)
                 current_pattern = [(x, y, cmd)]
             else:
@@ -610,12 +612,12 @@ class PXFAnalyzer:
             'pattern_index': pattern_index,
             'stitch_count': len(coordinates),
             'dimensions': {
-                'width': (max(x_coords) - min(x_coords)) / 10.0,  # w mm
-                'height': (max(y_coords) - min(y_coords)) / 10.0,  # w mm
-                'x_min': min(x_coords) / 10.0,
-                'x_max': max(x_coords) / 10.0,
-                'y_min': min(y_coords) / 10.0,
-                'y_max': max(y_coords) / 10.0
+                'width': (max(x_coords) - min(x_coords)) / 100.0,  # w cm
+                'height': (max(y_coords) - min(y_coords)) / 100.0,  # w cm
+                'x_min': min(x_coords) / 100.0,
+                'x_max': max(x_coords) / 100.0,
+                'y_min': min(y_coords) / 100.0,
+                'y_max': max(y_coords) / 100.0
             }
         }
         
@@ -628,7 +630,7 @@ class PXFAnalyzer:
             distances.append(dist)
         
         if distances:
-            pattern_info['average_stitch_length'] = sum(distances) / len(distances) / 10.0  # w mm
+            pattern_info['average_stitch_length'] = sum(distances) / len(distances) / 100.0  # w cm
         
         # Analiza typu ściegów na podstawie komend
         stitch_types = self._analyze_pattern_stitch_types(coordinates)
@@ -642,9 +644,9 @@ class PXFAnalyzer:
         width = pattern_info['dimensions']['width']
         height = pattern_info['dimensions']['height']
         
-        if width > 1000 or height > 1000:  # Ponad 1 metr
+        if width > 100 or height > 100:  # Ponad 100 cm
             pattern_info['dimension_warning'] = 'Bardzo duże wymiary - możliwe błędne odczytanie'
-        elif width < 1 or height < 1:  # Mniej niż 1mm
+        elif width < 0.1 or height < 0.1:  # Mniej niż 1 mm
             pattern_info['dimension_warning'] = 'Bardzo małe wymiary - możliwe błędne odczytanie'
         
         # Oszacowanie czasu haftu dla tego wzoru
@@ -706,30 +708,30 @@ class PXFAnalyzer:
         x_coords = [c[0] for c in coordinates]
         y_coords = [c[1] for c in coordinates]
         
-        width = (max(x_coords) - min(x_coords)) / 10.0  # w mm
-        height = (max(y_coords) - min(y_coords)) / 10.0  # w mm
-        area = width * height  # mm²
+        width = (max(x_coords) - min(x_coords)) / 100.0  # w cm
+        height = (max(y_coords) - min(y_coords)) / 100.0  # w cm
+        area = width * height  # cm²
         
         if area > 0:
-            density = len(coordinates) / area  # ściegów/mm²
+            density = len(coordinates) / area  # ściegów/cm²
             
-            # Interpretacja gęstości
-            if density < 0.1:
+            # Interpretacja gęstości (przeliczone dla cm²)
+            if density < 10:
                 density_level = 'Bardzo niska'
-            elif density < 0.5:
+            elif density < 50:
                 density_level = 'Niska'
-            elif density < 2.0:
+            elif density < 200:
                 density_level = 'Średnia'
-            elif density < 5.0:
+            elif density < 500:
                 density_level = 'Wysoka'
             else:
                 density_level = 'Bardzo wysoka'
             
             return {
-                'density_value': f"{density:.2f} ściegów/mm²",
+                'density_value': f"{density:.1f} ściegów/cm²",
                 'density_level': density_level,
-                'area': f"{area:.1f} mm²",
-                'recommended_density': '1-3 ściegów/mm²'
+                'area': f"{area:.2f} cm²",
+                'recommended_density': '100-300 ściegów/cm²'
             }
         
         return {}
@@ -754,11 +756,11 @@ class PXFAnalyzer:
                     value = struct.unpack('<I', self.data[pos+4:pos+8])[0]
                     
                     if marker == b'SPEED' and 100 <= value <= 2000:
-                        settings['speed'] = f"{value} spm"
+                        settings['machine_speed'] = f"{value} spm"
                     elif marker == b'TENSION' and 1 <= value <= 100:
-                        settings['tension'] = f"Level {value}"
+                        settings['thread_tension'] = f"Level {value}"
                     elif marker == b'HOOP' and 50 <= value <= 500:
-                        settings['hoop_size'] = f"{value} mm"
+                        settings['hoop_dimensions'] = f"{value / 10.0:.1f} cm"
                     elif marker == b'NEEDLE' and 1 <= value <= 15:
                         settings['needle_count'] = value
                         

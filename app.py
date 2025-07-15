@@ -1,6 +1,7 @@
 import os
 import logging
 import tempfile
+import signal
 from flask import Flask, render_template, request, redirect, url_for, flash
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -28,15 +29,26 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def timeout_handler(signum, frame):
+    """Handle timeout signal for long-running analysis"""
+    raise TimeoutError("Analysis timed out - file might be too large")
+
 def try_pxf_analysis(file_path):
     """Try to extract detailed information from PXF files using advanced binary analysis"""
     try:
         with open(file_path, 'rb') as f:
             data = f.read()
         
-        # Użyj zaawansowanego analizatora PXF
-        pxf_analyzer = PXFAnalyzer(data)
-        advanced_analysis = pxf_analyzer.analyze()
+        # Ustaw timeout na 120 sekund dla dużych plików
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(120)  # 2 minuty timeout
+        
+        try:
+            # Użyj zaawansowanego analizatora PXF
+            pxf_analyzer = PXFAnalyzer(data)
+            advanced_analysis = pxf_analyzer.analyze()
+        finally:
+            signal.alarm(0)  # Anuluj timeout
         
         # Konwertuj wyniki do formatu kompatybilnego z resztą aplikacji
         analysis = {
@@ -184,8 +196,8 @@ def try_pxf_analysis(file_path):
                         # Filter reasonable dimension values (in 0.1mm units)
                         reasonable_dims = [v for v in [val1, val2, val3, val4] if 100 < v < 1000000]
                         if len(reasonable_dims) >= 2:
-                            width_cm = reasonable_dims[0] / 100.0  # Konwersja na cm
-                            height_cm = reasonable_dims[1] / 100.0
+                            width_cm = reasonable_dims[0] / 1000.0  # Konwersja na cm (z 0.1mm)
+                            height_cm = reasonable_dims[1] / 1000.0
                             detailed_info['design_size'] = f"{width_cm:.1f} × {height_cm:.1f} cm"
                             
                     except struct.error:
@@ -308,7 +320,7 @@ def try_pxf_analysis(file_path):
                 # Estimate thread length based on stitch count
                 if 'estimated_stitches' in detailed_info:
                     # Average stitch length in embroidery is about 2-4mm
-                    estimated_length = (detailed_info['estimated_stitches'] * 3) / 10  # in cm
+                    estimated_length = (detailed_info['estimated_stitches'] * 0.3)  # in cm
                     if estimated_length > 100:
                         detailed_info['thread_consumption'] = f"{estimated_length/100:.1f} m"
                     else:
@@ -338,6 +350,9 @@ def try_pxf_analysis(file_path):
         
         return analysis
         
+    except TimeoutError as e:
+        logging.error(f"Analysis timeout: {e}")
+        return None
     except Exception as e:
         logging.error(f"Error in PXF binary analysis: {e}")
         return None
