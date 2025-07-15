@@ -409,6 +409,12 @@
                                             <td>{{ analysis.machine_settings.hoop_size }}</td>
                                         </tr>
                                         {% endif %}
+                                        {% if analysis.machine_settings.needle_count != 'Unknown' %}
+                                        <tr>
+                                            <td><strong>Liczba igieł:</strong></td>
+                                            <td>{{ analysis.machine_settings.needle_count }}</td>
+                                        </tr>
+                                        {% endif %}
                                     </table>
                                 </div>
                             </div>
@@ -443,6 +449,118 @@
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Advanced PXF Analysis Results -->
+        {% if analysis.raw_analysis and analysis.advanced_pxf_analysis %}
+        <div class="row mb-4">
+            <div class="col">
+                <div class="card border-info">
+                    <div class="card-header bg-info text-white">
+                        <h4 class="card-title mb-0">
+                            <i class="fas fa-microscope me-2"></i>
+                            Zaawansowana analiza PXF
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Status analizy: 
+                                    {% if analysis.advanced_pxf_analysis.analysis_success %}
+                                        <span class="badge bg-success">Sukces</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">Częściowy</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="text-info">Format pliku:</h6>
+                                <ul class="list-unstyled">
+                                    <li><strong>Typ:</strong> {{ analysis.advanced_pxf_analysis.file_format.type }}</li>
+                                    <li><strong>Wersja:</strong> {{ analysis.advanced_pxf_analysis.file_format.version }}</li>
+                                    <li><strong>Opis:</strong> {{ analysis.advanced_pxf_analysis.file_format.description }}</li>
+                                </ul>
+                                
+                                {% if analysis.advanced_pxf_analysis.header_analysis %}
+                                <h6 class="text-info mt-3">Analiza nagłówka:</h6>
+                                <ul class="list-unstyled">
+                                    {% for key, value in analysis.advanced_pxf_analysis.header_analysis.items() %}
+                                    {% if key != 'error' %}
+                                    <li><strong>{{ key }}:</strong> {{ value }}</li>
+                                    {% endif %}
+                                    {% endfor %}
+                                </ul>
+                                {% endif %}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                {% if analysis.advanced_pxf_analysis.sections_found %}
+                                <h6 class="text-info">Znalezione sekcje:</h6>
+                                <ul class="list-unstyled">
+                                    {% for section_name, section_data in analysis.advanced_pxf_analysis.sections_found.items() %}
+                                    <li><i class="fas fa-check text-success me-2"></i>{{ section_name }}
+                                        {% if section_data.count %}
+                                        ({{ section_data.count }} elementów)
+                                        {% endif %}
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                                {% endif %}
+                                
+                                {% if analysis.advanced_pxf_analysis.stitch_data %}
+                                <h6 class="text-info mt-3">Dane ściegów:</h6>
+                                <ul class="list-unstyled">
+                                    {% for key, value in analysis.advanced_pxf_analysis.stitch_data.items() %}
+                                    {% if key == 'dimensions' %}
+                                    <li><strong>Wymiary wzoru:</strong> {{ value.width }}×{{ value.height }} mm</li>
+                                    {% elif key == 'coordinate_count' %}
+                                    <li><strong>Znalezione współrzędne:</strong> {{ value }}</li>
+                                    {% elif key == 'average_stitch_length' %}
+                                    <li><strong>Średnia długość ściegu:</strong> {{ value }} mm</li>
+                                    {% endif %}
+                                    {% endfor %}
+                                </ul>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        {% if analysis.advanced_pxf_analysis.technical_specs %}
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                                <h6 class="text-info">Specyfikacje techniczne:</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        {% for key, value in analysis.advanced_pxf_analysis.technical_specs.items() %}
+                                        <tr>
+                                            <td><strong>{{ key }}:</strong></td>
+                                            <td>{{ value }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if analysis.advanced_pxf_analysis.error %}
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    Uwaga: {{ analysis.advanced_pxf_analysis.error }}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>

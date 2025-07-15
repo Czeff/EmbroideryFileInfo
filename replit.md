@@ -16,6 +16,14 @@ This is a Flask-based web application that allows users to upload and analyze em
   - String pattern analysis for embroidery terms
   - Coordinate pattern analysis for stitch data
   - File structure analysis for PMLPXF headers
+- **Advanced PXF Analyzer (July 15, 2025):** Created dedicated PXF analysis engine with:
+  - Specialized PMLPXF header parsing
+  - Section-based file structure analysis
+  - Machine settings extraction (speed, tension, hoop size)
+  - Technical specifications calculation
+  - Comprehensive coordinate pattern analysis
+  - Color section extraction with RGB values
+  - Format identification and version detection
 
 Note: Some .pxf variants (like PMLPXF format) may not be fully supported by pyembroidery and users are advised to convert such files to more compatible formats like .dst, .pes, or .jef.
 

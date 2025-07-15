@@ -5,6 +5,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from werkzeug.utils import secure_filename
 from werkzeug.middleware.proxy_fix import ProxyFix
 import pyembroidery
+from pxf_analyzer import PXFAnalyzer
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -33,23 +34,123 @@ def try_pxf_analysis(file_path):
         with open(file_path, 'rb') as f:
             data = f.read()
         
-        # Basic file information
+        # Użyj zaawansowanego analizatora PXF
+        pxf_analyzer = PXFAnalyzer(data)
+        advanced_analysis = pxf_analyzer.analyze()
+        
+        # Konwertuj wyniki do formatu kompatybilnego z resztą aplikacji
         analysis = {
             'filename': os.path.basename(file_path),
             'file_size': len(data),
-            'format_detected': 'PXF (PMLPXF variant)',
-            'stitch_count': 'Unknown (requires conversion)',
-            'thread_count': 0,
+            'format_detected': advanced_analysis['file_format'].get('description', 'PXF format'),
+            'stitch_count': advanced_analysis['header_analysis'].get('stitch_count', 'Unknown'),
+            'thread_count': advanced_analysis['header_analysis'].get('color_count', 0),
             'colors': [],
-            'stitch_types': ['Format not fully supported'],
+            'stitch_types': ['Advanced PXF Analysis'],
             'layers': [],
             'dimensions': None,
             'raw_analysis': True,
             'detailed_info': {},
             'embroidery_parameters': {},
             'stitch_techniques': {},
-            'machine_settings': {}
+            'machine_settings': {},
+            'advanced_pxf_analysis': advanced_analysis
         }
+        
+        # Mapuj wyniki zaawansowanej analizy do standardowego formatu
+        
+        # Informacje szczegółowe
+        if advanced_analysis['header_analysis']:
+            header = advanced_analysis['header_analysis']
+            analysis['detailed_info'] = {
+                'software': advanced_analysis.get('file_format', {}).get('description', 'Unknown'),
+                'format_version': advanced_analysis.get('file_format', {}).get('version', 'Unknown'),
+                'header_size': header.get('header_size', 'Unknown'),
+                'data_size': header.get('data_size', 'Unknown'),
+                'estimated_stitches': header.get('stitch_count', 'Unknown'),
+                'color_count': header.get('color_count', 0),
+                'has_underlay': header.get('has_underlay', False),
+                'has_applique': header.get('has_applique', False),
+                'has_sequins': header.get('has_sequins', False)
+            }
+            
+            # Wymiary z zaawansowanej analizy
+            if 'dimensions' in header:
+                dims = header['dimensions']
+                analysis['detailed_info']['estimated_dimensions'] = f"{dims['width']:.1f} × {dims['height']:.1f} mm"
+                analysis['dimensions'] = {
+                    'width': dims['width'],
+                    'height': dims['height'],
+                    'x_offset': dims['x_offset'],
+                    'y_offset': dims['y_offset']
+                }
+        
+        # Parametry haftu
+        if advanced_analysis['embroidery_parameters']:
+            params = advanced_analysis['embroidery_parameters']
+            analysis['embroidery_parameters'] = {
+                'stitch_density': params.get('stitch_density', 'Unknown'),
+                'underlay_type': params.get('underlay_type', 'Unknown'),
+                'pull_compensation': params.get('pull_compensation', 'Unknown'),
+                'fill_angle': params.get('fill_angle', 'Unknown'),
+                'automatic_underlay': 'Enabled' if analysis['detailed_info'].get('has_underlay') else 'Unknown',
+                'analysis_method': 'Advanced PXF Analysis'
+            }
+        
+        # Ustawienia maszyny
+        if advanced_analysis['machine_settings']:
+            machine = advanced_analysis['machine_settings']
+            analysis['machine_settings'] = {
+                'speed_settings': machine.get('speed', 'Unknown'),
+                'tension_settings': machine.get('tension', 'Unknown'),
+                'hoop_size': machine.get('hoop_size', 'Unknown'),
+                'needle_count': machine.get('needle_count', 'Unknown'),
+                'machine_type': 'Unknown'
+            }
+        
+        # Dane ściegów
+        if advanced_analysis['stitch_data']:
+            stitch_data = advanced_analysis['stitch_data']
+            if 'dimensions' in stitch_data:
+                dims = stitch_data['dimensions']
+                analysis['detailed_info']['pattern_dimensions'] = f"{dims['width']:.1f} × {dims['height']:.1f} mm"
+            
+            if 'average_stitch_length' in stitch_data:
+                analysis['detailed_info']['average_stitch_length'] = f"{stitch_data['average_stitch_length']:.1f} mm"
+            
+            if 'coordinate_count' in stitch_data:
+                analysis['detailed_info']['coordinates_found'] = stitch_data['coordinate_count']
+        
+        # Specyfikacje techniczne
+        if advanced_analysis['technical_specs']:
+            specs = advanced_analysis['technical_specs']
+            analysis['detailed_info'].update(specs)
+        
+        # Kolory z sekcji kolorów
+        if advanced_analysis['sections_found'] and 'colors' in advanced_analysis['sections_found']:
+            color_section = advanced_analysis['sections_found']['colors']
+            if 'colors' in color_section:
+                analysis['colors'] = []
+                for color in color_section['colors']:
+                    analysis['colors'].append({
+                        'index': color['index'],
+                        'hex': color['rgb'],
+                        'brand': 'Unknown',
+                        'description': f"Color {color['index'] + 1}"
+                    })
+                analysis['thread_count'] = len(analysis['colors'])
+        
+        # Jeśli analiza się powiodła, zaktualizuj informacje o typach ściegów
+        if advanced_analysis['analysis_success']:
+            analysis['stitch_types'] = ['PXF Advanced Analysis - Success']
+            analysis['layers'] = [
+                f"Format: {advanced_analysis['file_format'].get('description', 'PXF')}",
+                f"Analysis: {len(advanced_analysis)} sections analyzed"
+            ]
+        else:
+            analysis['stitch_types'] = ['PXF Advanced Analysis - Limited']
+            if 'error' in advanced_analysis:
+                analysis['layers'] = [f"Error: {advanced_analysis['error']}"]
         
         # Advanced binary analysis for more detailed extraction
         header_info = []
