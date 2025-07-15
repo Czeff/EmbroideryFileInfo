@@ -74,38 +74,40 @@ def try_pxf_analysis(file_path):
                 'has_sequins': header.get('has_sequins', False)
             }
             
-            # Wymiary z zaawansowanej analizy
+            # Wymiary z zaawansowanej analizy (w cm)
             if 'dimensions' in header:
                 dims = header['dimensions']
-                analysis['detailed_info']['estimated_dimensions'] = f"{dims['width']:.1f} × {dims['height']:.1f} mm"
+                width_cm = dims['width'] / 10.0  # Konwersja mm na cm
+                height_cm = dims['height'] / 10.0
+                analysis['detailed_info']['hoop_size'] = f"{width_cm:.1f} × {height_cm:.1f} cm"
                 analysis['dimensions'] = {
-                    'width': dims['width'],
-                    'height': dims['height'],
-                    'x_offset': dims['x_offset'],
-                    'y_offset': dims['y_offset']
+                    'width': width_cm,
+                    'height': height_cm,
+                    'x_offset': dims['x_offset'] / 10.0,
+                    'y_offset': dims['y_offset'] / 10.0
                 }
         
-        # Parametry haftu
+        # Parametry haftu (terminologia Inkstitch)
         if advanced_analysis['embroidery_parameters']:
             params = advanced_analysis['embroidery_parameters']
             analysis['embroidery_parameters'] = {
-                'stitch_density': params.get('stitch_density', 'Unknown'),
+                'row_spacing': params.get('stitch_density', 'Unknown'),
                 'underlay_type': params.get('underlay_type', 'Unknown'),
                 'pull_compensation': params.get('pull_compensation', 'Unknown'),
                 'fill_angle': params.get('fill_angle', 'Unknown'),
-                'automatic_underlay': 'Enabled' if analysis['detailed_info'].get('has_underlay') else 'Unknown',
-                'analysis_method': 'Advanced PXF Analysis'
+                'auto_underlay': 'Włączone' if analysis['detailed_info'].get('has_underlay') else 'Nieznane',
+                'analysis_method': 'Zaawansowana analiza PXF'
             }
         
-        # Ustawienia maszyny
+        # Ustawienia maszyny (terminologia Inkstitch)
         if advanced_analysis['machine_settings']:
             machine = advanced_analysis['machine_settings']
             analysis['machine_settings'] = {
-                'speed_settings': machine.get('speed', 'Unknown'),
-                'tension_settings': machine.get('tension', 'Unknown'),
-                'hoop_size': machine.get('hoop_size', 'Unknown'),
-                'needle_count': machine.get('needle_count', 'Unknown'),
-                'machine_type': 'Unknown'
+                'machine_speed': machine.get('speed', 'Nieznane'),
+                'thread_tension': machine.get('tension', 'Nieznane'),
+                'hoop_dimensions': machine.get('hoop_size', 'Nieznane'),
+                'needle_count': machine.get('needle_count', 'Nieznane'),
+                'machine_type': 'Nieznane'
             }
         
         # Dane ściegów
@@ -113,10 +115,13 @@ def try_pxf_analysis(file_path):
             stitch_data = advanced_analysis['stitch_data']
             if 'dimensions' in stitch_data:
                 dims = stitch_data['dimensions']
-                analysis['detailed_info']['pattern_dimensions'] = f"{dims['width']:.1f} × {dims['height']:.1f} mm"
+                width_cm = dims['width'] / 10.0
+                height_cm = dims['height'] / 10.0
+                analysis['detailed_info']['pattern_size'] = f"{width_cm:.1f} × {height_cm:.1f} cm"
             
             if 'average_stitch_length' in stitch_data:
-                analysis['detailed_info']['average_stitch_length'] = f"{stitch_data['average_stitch_length']:.1f} mm"
+                length_cm = stitch_data['average_stitch_length'] / 10.0
+                analysis['detailed_info']['avg_stitch_length'] = f"{length_cm:.2f} cm"
             
             if 'coordinate_count' in stitch_data:
                 analysis['detailed_info']['coordinates_found'] = stitch_data['coordinate_count']
@@ -179,9 +184,9 @@ def try_pxf_analysis(file_path):
                         # Filter reasonable dimension values (in 0.1mm units)
                         reasonable_dims = [v for v in [val1, val2, val3, val4] if 100 < v < 1000000]
                         if len(reasonable_dims) >= 2:
-                            width_mm = reasonable_dims[0] / 10.0
-                            height_mm = reasonable_dims[1] / 10.0
-                            detailed_info['estimated_dimensions'] = f"{width_mm:.1f} × {height_mm:.1f} mm"
+                            width_cm = reasonable_dims[0] / 100.0  # Konwersja na cm
+                            height_cm = reasonable_dims[1] / 100.0
+                            detailed_info['design_size'] = f"{width_cm:.1f} × {height_cm:.1f} cm"
                             
                     except struct.error:
                         pass
@@ -245,13 +250,13 @@ def try_pxf_analysis(file_path):
                         detailed_info['estimated_stitches'] = estimated_stitches
                 
                 # Estimate pattern density
-                if stitch_patterns > 0 and 'estimated_dimensions' in detailed_info:
+                if stitch_patterns > 0 and 'design_size' in detailed_info:
                     try:
-                        dims = detailed_info['estimated_dimensions'].split('×')
-                        area = float(dims[0].strip()) * float(dims[1].replace('mm', '').strip())
+                        dims = detailed_info['design_size'].split('×')
+                        area = float(dims[0].strip()) * float(dims[1].replace('cm', '').strip())
                         if area > 0:
                             density = estimated_stitches / area
-                            detailed_info['stitch_density'] = f"{density:.1f} stitches/cm²"
+                            detailed_info['stitch_density'] = f"{density:.1f} ściegów/cm²"
                     except:
                         pass
                 
@@ -259,11 +264,11 @@ def try_pxf_analysis(file_path):
                 if stitch_patterns > 0:
                     jump_ratio = jump_patterns / stitch_patterns if stitch_patterns > 0 else 0
                     if jump_ratio > 0.3:
-                        detailed_info['pattern_type'] = 'Complex design with fills and details'
+                        detailed_info['fill_type'] = 'Złożony wzór z wypełnieniami i detalami'
                     elif jump_ratio > 0.1:
-                        detailed_info['pattern_type'] = 'Medium complexity design'
+                        detailed_info['fill_type'] = 'Wzór średniej złożoności'
                     else:
-                        detailed_info['pattern_type'] = 'Simple outline or text design'
+                        detailed_info['fill_type'] = 'Prosty kontur lub tekst'
                 
                 # Advanced color analysis - look for RGB patterns
                 colors_found = []
@@ -305,9 +310,9 @@ def try_pxf_analysis(file_path):
                     # Average stitch length in embroidery is about 2-4mm
                     estimated_length = (detailed_info['estimated_stitches'] * 3) / 10  # in cm
                     if estimated_length > 100:
-                        detailed_info['estimated_thread_length'] = f"{estimated_length/100:.1f} m"
+                        detailed_info['thread_consumption'] = f"{estimated_length/100:.1f} m"
                     else:
-                        detailed_info['estimated_thread_length'] = f"{estimated_length:.0f} cm"
+                        detailed_info['thread_consumption'] = f"{estimated_length:.0f} cm"
                 
                 # Extract embroidery parameters from PXF file
                 embroidery_params = extract_pxf_embroidery_parameters(data)
@@ -463,7 +468,7 @@ def analyze_pxf_with_alternative_methods(data):
             
             if distances:
                 avg_distance = sum(distances) / len(distances)
-                results['parameters_found']['average_stitch_length'] = f"{avg_distance/10:.1f} mm"
+                results['parameters_found']['avg_stitch_length'] = f"{avg_distance/100:.2f} cm"
                 results['parameters_found']['stitch_pattern_detected'] = f"{len(coordinates)} coordinate pairs"
         
     except Exception as e:
@@ -474,16 +479,16 @@ def analyze_pxf_with_alternative_methods(data):
 def extract_pxf_embroidery_parameters(data):
     """Extract embroidery parameters from PXF file using multiple analysis methods"""
     params = {
-        'stitch_density': 'Unknown',
-        'underlay_type': 'Unknown',
-        'pull_compensation': 'Unknown',
-        'push_compensation': 'Unknown',
-        'stitch_angle': 'Unknown',
-        'fill_pattern': 'Unknown',
-        'outline_width': 'Unknown',
-        'automatic_underlay': 'Unknown',
+        'row_spacing': 'Nieznane',
+        'underlay_type': 'Nieznane',
+        'pull_compensation': 'Nieznane',
+        'push_compensation': 'Nieznane',
+        'fill_angle': 'Nieznane',
+        'fill_type': 'Nieznane',
+        'bean_stitch_repeats': 'Nieznane',
+        'auto_underlay': 'Nieznane',
         'density_settings': {},
-        'analysis_method': 'Multi-method analysis'
+        'analysis_method': 'Analiza wielometodowa'
     }
     
     # Try alternative analysis methods
@@ -515,7 +520,8 @@ def extract_pxf_embroidery_parameters(data):
             if match:
                 density_val = float(match.group(1))
                 if 0.1 <= density_val <= 50:  # Reasonable density range in mm
-                    params['stitch_density'] = f"{density_val:.1f} mm"
+                    density_cm = density_val / 10.0  # Konwersja na cm
+                    params['row_spacing'] = f"{density_cm:.2f} cm"
                     density_found = True
                     break
         
@@ -533,7 +539,8 @@ def extract_pxf_embroidery_parameters(data):
                             import struct
                             density_val = struct.unpack('<I', density_bytes)[0]
                             if 10 <= density_val <= 1000:  # Reasonable density range
-                                params['stitch_density'] = f"{density_val/100:.1f} mm"
+                                density_cm = (density_val/100) / 10.0  # Konwersja na cm
+                                params['row_spacing'] = f"{density_cm:.2f} cm"
                                 density_found = True
                                 break
                     except:
@@ -548,7 +555,8 @@ def extract_pxf_embroidery_parameters(data):
                                 test_bytes = data[i+offset:i+offset+4]
                                 float_val = struct.unpack('<f', test_bytes)[0]
                                 if 0.1 <= float_val <= 20:  # Reasonable density range
-                                    params['stitch_density'] = f"{float_val:.1f} mm"
+                                    density_cm = float_val / 10.0  # Konwersja na cm
+                                    params['row_spacing'] = f"{density_cm:.2f} cm"
                                     density_found = True
                                     break
                     except:
@@ -561,14 +569,14 @@ def extract_pxf_embroidery_parameters(data):
             if b'UNDERLAY' in chunk or b'underlay' in chunk:
                 underlay_info = data[i:i+50].decode('utf-8', errors='ignore')
                 if 'AUTO' in underlay_info:
-                    params['automatic_underlay'] = 'Enabled'
-                    params['underlay_type'] = 'Automatic'
+                    params['auto_underlay'] = 'Włączone'
+                    params['underlay_type'] = 'Automatyczny'
                 elif 'ZIGZAG' in underlay_info:
-                    params['underlay_type'] = 'Zigzag'
+                    params['underlay_type'] = 'Zygzak'
                 elif 'EDGE' in underlay_info:
-                    params['underlay_type'] = 'Edge Run'
+                    params['underlay_type'] = 'Obrys'
                 elif 'CENTER' in underlay_info:
-                    params['underlay_type'] = 'Center Run'
+                    params['underlay_type'] = 'Centralny'
             
             # Look for pull compensation settings
             if b'PULL' in chunk or b'pull' in chunk:
@@ -585,13 +593,13 @@ def extract_pxf_embroidery_parameters(data):
             if b'FILL' in chunk or b'fill' in chunk:
                 fill_info = data[i:i+30].decode('utf-8', errors='ignore')
                 if 'SATIN' in fill_info:
-                    params['fill_pattern'] = 'Satin'
+                    params['fill_type'] = 'Satyna'
                 elif 'ZIGZAG' in fill_info:
-                    params['fill_pattern'] = 'Zigzag'
+                    params['fill_type'] = 'Zygzak'
                 elif 'CROSS' in fill_info:
-                    params['fill_pattern'] = 'Cross Hatch'
+                    params['fill_type'] = 'Krzyżyk'
                 elif 'TATAMI' in fill_info:
-                    params['fill_pattern'] = 'Tatami'
+                    params['fill_type'] = 'Tatami'
         
         # Extract angle information from stitch patterns
         angle_found = False
@@ -610,7 +618,7 @@ def extract_pxf_embroidery_parameters(data):
                         if x2 != x1 and not angle_found:
                             angle = math.degrees(math.atan2(y2 - y1, x2 - x1))
                             if -180 <= angle <= 180:
-                                params['stitch_angle'] = f"{angle:.0f}°"
+                                params['fill_angle'] = f"{angle:.0f}°"
                                 angle_found = True
                                 break
             except:
@@ -725,13 +733,13 @@ def extract_pxf_stitch_techniques(data):
 def extract_pxf_machine_settings(data):
     """Extract machine settings from PXF file"""
     settings = {
-        'speed_settings': 'Unknown',
-        'tension_settings': 'Unknown',
-        'needle_settings': 'Unknown',
-        'hoop_size': 'Unknown',
-        'machine_type': 'Unknown',
-        'thread_trimming': 'Unknown',
-        'color_sequence': 'Unknown',
+        'machine_speed': 'Nieznane',
+        'thread_tension': 'Nieznane',
+        'needle_settings': 'Nieznane',
+        'hoop_dimensions': 'Nieznane',
+        'machine_type': 'Nieznane',
+        'auto_trim': 'Nieznane',
+        'color_sequence': 'Nieznane',
         'jump_settings': {}
     }
     
@@ -747,7 +755,7 @@ def extract_pxf_machine_settings(data):
                     if len(speed_bytes) >= 2:
                         speed = struct.unpack('<H', speed_bytes[:2])[0]
                         if 100 <= speed <= 2000:  # Reasonable speed range
-                            settings['speed_settings'] = f"{speed} stitches/min"
+                            settings['machine_speed'] = f"{speed} ściegów/min"
                 except:
                     pass
             
@@ -758,7 +766,7 @@ def extract_pxf_machine_settings(data):
                     if len(tension_bytes) >= 2:
                         tension = struct.unpack('<H', tension_bytes[:2])[0]
                         if 1 <= tension <= 100:
-                            settings['tension_settings'] = f"Level {tension}"
+                            settings['thread_tension'] = f"Poziom {tension}"
                 except:
                     pass
             
@@ -768,7 +776,11 @@ def extract_pxf_machine_settings(data):
                 hoop_sizes = ['100x100', '130x180', '150x240', '200x300', '360x200']
                 for size in hoop_sizes:
                     if size in hoop_info:
-                        settings['hoop_size'] = f"{size} mm"
+                        # Konwersja mm na cm
+                        w, h = size.split('x')
+                        w_cm = int(w) / 10.0
+                        h_cm = int(h) / 10.0
+                        settings['hoop_dimensions'] = f"{w_cm:.1f}x{h_cm:.1f} cm"
                         break
             
             # Look for machine type
@@ -789,9 +801,9 @@ def extract_pxf_machine_settings(data):
             if b'TRIM' in chunk or b'trim' in chunk:
                 trim_info = data[i:i+30].decode('utf-8', errors='ignore')
                 if 'AUTO' in trim_info:
-                    settings['thread_trimming'] = 'Automatic'
+                    settings['auto_trim'] = 'Automatyczne'
                 elif 'MANUAL' in trim_info:
-                    settings['thread_trimming'] = 'Manual'
+                    settings['auto_trim'] = 'Manualne'
         
         # Analyze jump settings
         jump_distances = []
@@ -813,8 +825,8 @@ def extract_pxf_machine_settings(data):
             avg_jump = sum(jump_distances) / len(jump_distances)
             max_jump = max(jump_distances)
             settings['jump_settings'] = {
-                'average_jump': f"{avg_jump/10:.1f} mm",
-                'max_jump': f"{max_jump/10:.1f} mm",
+                'average_jump': f"{avg_jump/100:.2f} cm",
+                'max_jump': f"{max_jump/100:.2f} cm",
                 'jump_count': len(jump_distances)
             }
             
@@ -901,17 +913,17 @@ def analyze_stitch_details(pattern):
             
             prev_x, prev_y = x, y
     
-    # Calculate averages
+    # Calculate averages (jednostki w cm)
     if stitch_distances:
-        stats['avg_stitch_length'] = round(sum(stitch_distances) / len(stitch_distances) / 10, 2)  # Convert to mm
+        stats['avg_stitch_length'] = round(sum(stitch_distances) / len(stitch_distances) / 100, 3)  # Convert to cm
     
-    # Convert thread length to mm and then to more readable units
-    stats['total_thread_length'] = round(stats['total_thread_length'] / 10, 2)  # mm
-    if stats['total_thread_length'] > 1000:
-        stats['total_thread_length_m'] = round(stats['total_thread_length'] / 1000, 2)
+    # Convert thread length to cm and then to more readable units
+    stats['total_thread_length'] = round(stats['total_thread_length'] / 100, 2)  # cm
+    if stats['total_thread_length'] > 100:
+        stats['total_thread_length_m'] = round(stats['total_thread_length'] / 100, 2)
     
-    # Convert max jump distance to mm
-    stats['max_jump_distance'] = round(stats['max_jump_distance'] / 10, 2)
+    # Convert max jump distance to cm
+    stats['max_jump_distance'] = round(stats['max_jump_distance'] / 100, 2)
     
     return stats
 
@@ -942,7 +954,7 @@ def analyze_technical_specs(pattern, dimensions):
             elif 'machine' in key.lower():
                 tech_info['machine_info']['type'] = value
             elif 'hoop' in key.lower():
-                tech_info['machine_info']['hoop_size'] = value
+                tech_info['machine_info']['hoop_dimensions'] = value
     
     # Analyze pattern complexity
     if len(pattern.stitches) > 0:
@@ -967,18 +979,18 @@ def calculate_performance_metrics(pattern, dimensions):
         'stitch_density': 0,
         'thread_efficiency': 0,
         'color_efficiency': 0,
-        'recommended_speed': 'Unknown'
+        'recommended_speed': 'Nieznane'
     }
     
     if len(pattern.stitches) == 0 or not dimensions:
         return metrics
     
     stitch_count = len(pattern.stitches)
-    area = dimensions['width'] * dimensions['height']  # mm²
+    area = dimensions['width'] * dimensions['height']  # Już w cm² jeśli dimensions są w cm
     
     # Calculate stitch density (stitches per cm²)
     if area > 0:
-        metrics['stitch_density'] = round(stitch_count / (area / 100), 1)  # Convert mm² to cm²
+        metrics['stitch_density'] = round(stitch_count / area, 1)  # ściegów na cm²
     
     # Estimate embroidery time (rough calculation)
     # Average machine speed: 400-800 stitches per minute

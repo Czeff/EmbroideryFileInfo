@@ -24,6 +24,12 @@ This is a Flask-based web application that allows users to upload and analyze em
   - Comprehensive coordinate pattern analysis
   - Color section extraction with RGB values
   - Format identification and version detection
+- **Inkstitch Terminology & Units Update (July 15, 2025):** Updated parameter names and units for better compatibility:
+  - Changed from mm to cm for all dimension displays
+  - Updated parameter names to match Inkstitch terminology (e.g., row_spacing, fill_angle, auto_underlay)
+  - Translated machine settings to Polish (machine_speed, thread_tension, hoop_dimensions)
+  - Enhanced fill type detection (Satyna, Zygzak, Krzyżyk, Tatami)
+  - Updated thread consumption calculations in cm and meters
   - **Multi-Pattern Detection (July 15, 2025):** Enhanced to handle files with multiple embroidery patterns:
     - Detects pattern end markers (0x8003, 0x8013, 0x8023, 0x8033)
     - Analyzes jump distances between stitches to identify pattern boundaries
