@@ -25,8 +25,92 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def try_pxf_analysis(file_path):
+    """Try to extract basic information from PXF files using binary analysis"""
+    try:
+        with open(file_path, 'rb') as f:
+            data = f.read()
+        
+        # Basic file information
+        analysis = {
+            'filename': os.path.basename(file_path),
+            'file_size': len(data),
+            'format_detected': 'PXF (PMLPXF variant)',
+            'stitch_count': 'Unknown (requires conversion)',
+            'thread_count': 0,
+            'colors': [],
+            'stitch_types': ['Format not fully supported'],
+            'layers': [],
+            'dimensions': None,
+            'raw_analysis': True
+        }
+        
+        # Try to extract some basic information from the binary data
+        header_info = []
+        
+        # Check for PMLPXF header
+        if data.startswith(b'PMLPXF01'):
+            header_info.append('PMLPXF Version 1 format detected')
+            
+            # Try to find version and creation info
+            try:
+                # Look for "Created" string which often appears in PXF metadata
+                created_pos = data.find(b'Created')
+                if created_pos != -1:
+                    # Extract some text around the "Created" marker
+                    start = max(0, created_pos - 20)
+                    end = min(len(data), created_pos + 100)
+                    metadata = data[start:end]
+                    try:
+                        # Try to decode as text to extract readable info
+                        metadata_str = metadata.decode('utf-8', errors='ignore')
+                        if 'Created' in metadata_str:
+                            header_info.append(f'Metadata found: {metadata_str[:50]}...')
+                    except:
+                        pass
+                
+                # Try to estimate thread count by looking for color patterns
+                # PXF files often store RGB color values
+                rgb_patterns = 0
+                pos = 0
+                while pos < len(data) - 3:
+                    # Look for potential RGB triplets (values between 0-255)
+                    if (data[pos] <= 255 and data[pos+1] <= 255 and data[pos+2] <= 255 and
+                        data[pos] + data[pos+1] + data[pos+2] > 50):  # Not all zeros/very dark
+                        rgb_patterns += 1
+                        pos += 3
+                    else:
+                        pos += 1
+                
+                # Rough estimation of thread colors
+                estimated_colors = min(rgb_patterns // 10, 20)  # Rough heuristic
+                if estimated_colors > 0:
+                    analysis['thread_count'] = f"~{estimated_colors} (estimated)"
+                    for i in range(min(estimated_colors, 5)):
+                        analysis['colors'].append({
+                            'index': i + 1,
+                            'color': 'Unknown',
+                            'hex': 'N/A',
+                            'description': 'Requires conversion for detailed info',
+                            'brand': 'N/A'
+                        })
+                
+            except Exception as e:
+                logging.warning(f"Error in PXF analysis: {e}")
+        
+        analysis['layers'] = header_info if header_info else ['Basic file structure detected']
+        
+        # Add helpful conversion note
+        analysis['conversion_note'] = 'Ten plik wymaga konwersji do formatu .dst, .pes lub .jef aby uzyskać pełne informacje o wzorze haftu.'
+        
+        return analysis
+        
+    except Exception as e:
+        logging.error(f"Error in PXF binary analysis: {e}")
+        return None
+
 def analyze_embroidery_file(file_path):
-    """Analyze embroidery file using pyembroidery and extract information"""
+    """Analyze embroidery file using multiple approaches"""
     try:
         # Log file information for debugging
         logging.info(f"Analyzing file: {file_path}")
@@ -39,23 +123,28 @@ def analyze_embroidery_file(file_path):
         if os.path.getsize(file_path) == 0:
             return None, "File is empty"
         
-        # Try to read the embroidery file
+        file_ext = os.path.splitext(file_path)[1].lower()
+        
+        # Try to read the embroidery file with pyembroidery first
         pattern = pyembroidery.read(file_path)
         
-        if pattern is None:
-            # Try to get more information about why it failed
-            file_ext = os.path.splitext(file_path)[1].lower()
+        if pattern is None and file_ext == '.pxf':
+            # For PXF files, try alternative analysis approaches
+            pxf_analysis = try_pxf_analysis(file_path)
+            if pxf_analysis:
+                return pxf_analysis, None
+            
+            # If alternative analysis fails, check the header for error type
             with open(file_path, 'rb') as f:
                 header = f.read(32)
                 logging.info(f"File header (first 32 bytes): {header}")
             
-            if file_ext == '.pxf':
-                if header.startswith(b'PMLPXF'):
-                    return None, "pxf_unsupported_variant"
-                else:
-                    return None, "pxf_invalid_structure"
+            if header.startswith(b'PMLPXF'):
+                return None, "pxf_unsupported_variant"
             else:
-                return None, f"Nie można odczytać pliku {file_ext}. Plik może być uszkodzony lub używać nieobsługiwanego wariantu formatu."
+                return None, "pxf_invalid_structure"
+        elif pattern is None:
+            return None, f"Nie można odczytać pliku {file_ext}. Plik może być uszkodzony lub używać nieobsługiwanego wariantu formatu."
         
         # Extract basic information
         analysis = {

@@ -27,13 +27,40 @@
             </div>
         </div>
 
+        <!-- Analysis Type Alert -->
+        {% if analysis.raw_analysis %}
+        <div class="row mb-4">
+            <div class="col">
+                <div class="alert alert-info">
+                    <h5 class="alert-heading">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Analiza podstawowa pliku PXF
+                    </h5>
+                    <p class="mb-2">
+                        Ten plik używa wariantu PMLPXF, który został przeanalizowany w trybie podstawowym.
+                        {{ analysis.conversion_note }}
+                    </p>
+                    <p class="mb-0">
+                        <strong>Format wykryty:</strong> {{ analysis.format_detected }}
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Summary Cards -->
         <div class="row mb-4">
             <div class="col-md-3">
                 <div class="card text-center">
                     <div class="card-body">
                         <i class="fas fa-calculator fa-2x text-info mb-2"></i>
-                        <h5 class="card-title">{{ analysis.stitch_count:,d }}</h5>
+                        <h5 class="card-title">
+                            {% if analysis.raw_analysis %}
+                                {{ analysis.stitch_count }}
+                            {% else %}
+                                {{ "{:,}".format(analysis.stitch_count) }}
+                            {% endif %}
+                        </h5>
                         <p class="card-text text-muted">Total Stitches</p>
                     </div>
                 </div>
@@ -42,7 +69,13 @@
                 <div class="card text-center">
                     <div class="card-body">
                         <i class="fas fa-palette fa-2x text-warning mb-2"></i>
-                        <h5 class="card-title">{{ analysis.thread_count }}</h5>
+                        <h5 class="card-title">
+                            {% if analysis.raw_analysis %}
+                                {{ analysis.thread_count }}
+                            {% else %}
+                                {{ analysis.thread_count }}
+                            {% endif %}
+                        </h5>
                         <p class="card-text text-muted">Thread Colors</p>
                     </div>
                 </div>
@@ -61,13 +94,21 @@
                     <div class="card-body">
                         <i class="fas fa-ruler fa-2x text-primary mb-2"></i>
                         <h5 class="card-title">
-                            {% if analysis.dimensions %}
+                            {% if analysis.raw_analysis %}
+                                {{ (analysis.file_size/1024)|round(1) }} KB
+                            {% elif analysis.dimensions %}
                                 {{ analysis.dimensions.width }}×{{ analysis.dimensions.height }}
                             {% else %}
                                 N/A
                             {% endif %}
                         </h5>
-                        <p class="card-text text-muted">Size (mm)</p>
+                        <p class="card-text text-muted">
+                            {% if analysis.raw_analysis %}
+                                File Size
+                            {% else %}
+                                Size (mm)
+                            {% endif %}
+                        </p>
                     </div>
                 </div>
             </div>
