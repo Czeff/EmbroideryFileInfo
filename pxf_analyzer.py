@@ -346,11 +346,12 @@ class PXFAnalyzer:
         return params
     
     def _analyze_stitch_data(self) -> Dict[str, Any]:
-        """Analizuje dane ściegów"""
+        """Analizuje dane ściegów z wykrywaniem wielu wzorów"""
         stitch_data = {}
         
         # Szukamy współrzędnych ściegów
         coordinates = []
+        patterns = []
         
         for i in range(0, len(self.data) - 6, 2):
             try:
@@ -361,7 +362,7 @@ class PXFAnalyzer:
                 if -32000 < x < 32000 and -32000 < y < 32000:
                     coordinates.append((x, y, cmd))
                     
-                    if len(coordinates) >= 1000:  # Ograniczamy dla wydajności
+                    if len(coordinates) >= 2000:  # Zwiększamy limit dla lepszej analizy
                         break
                         
             except struct.error:
@@ -370,11 +371,158 @@ class PXFAnalyzer:
         if coordinates:
             stitch_data['coordinate_count'] = len(coordinates)
             
-            # Obliczamy wymiary wzoru
-            x_coords = [c[0] for c in coordinates]
-            y_coords = [c[1] for c in coordinates]
+            # Wykrywanie wielu wzorów przez analizę przeskoków
+            patterns = self._detect_multiple_patterns(coordinates)
+            stitch_data['patterns_detected'] = len(patterns)
             
-            stitch_data['dimensions'] = {
+            if len(patterns) > 1:
+                stitch_data['multi_pattern_warning'] = True
+                stitch_data['pattern_analysis'] = []
+                
+                for i, pattern in enumerate(patterns):
+                    pattern_info = self._analyze_single_pattern(pattern, i)
+                    stitch_data['pattern_analysis'].append(pattern_info)
+                
+                # Obliczamy łączne wymiary wszystkich wzorów
+                all_x = [c[0] for c in coordinates]
+                all_y = [c[1] for c in coordinates]
+                stitch_data['total_dimensions'] = {
+                    'width': (max(all_x) - min(all_x)) / 10.0,
+                    'height': (max(all_y) - min(all_y)) / 10.0,
+                    'x_min': min(all_x) / 10.0,
+                    'x_max': max(all_x) / 10.0,
+                    'y_min': min(all_y) / 10.0,
+                    'y_max': max(all_y) / 10.0
+                }
+            else:
+                # Pojedynczy wzór - standardowa analiza
+                stitch_data['multi_pattern_warning'] = False
+                pattern_info = self._analyze_single_pattern(coordinates, 0)
+                stitch_data.update(pattern_info)
+        
+        return stitch_data
+    
+    def _detect_multiple_patterns(self, coordinates: List[Tuple[int, int, int]]) -> List[List[Tuple[int, int, int]]]:
+        """Wykrywa wiele wzorów na podstawie długich przeskoków i znaczników końca"""
+        if not coordinates:
+            return []
+        
+        patterns = []
+        current_pattern = []
+        
+        # Najpierw sprawdź znaczniki końca wzoru w danych binarnych
+        pattern_end_markers = self._find_pattern_end_markers()
+        
+        for i, (x, y, cmd) in enumerate(coordinates):
+            if i == 0:
+                current_pattern.append((x, y, cmd))
+                continue
+            
+            # Sprawdź czy to komenda końca wzoru (typowe kody: 0x8003, 0x8013, 0x8023)
+            if cmd in [0x8003, 0x8013, 0x8023, 0x8033] and len(current_pattern) > 10:
+                current_pattern.append((x, y, cmd))
+                patterns.append(current_pattern)
+                current_pattern = []
+                continue
+            
+            # Oblicz dystans od poprzedniego punktu
+            prev_x, prev_y, _ = coordinates[i-1]
+            distance = ((x - prev_x)**2 + (y - prev_y)**2)**0.5
+            
+            # Jeśli dystans > 50mm (500 jednostek), prawdopodobnie nowy wzór
+            if distance > 500 and len(current_pattern) > 10:
+                patterns.append(current_pattern)
+                current_pattern = [(x, y, cmd)]
+            else:
+                current_pattern.append((x, y, cmd))
+        
+        # Dodaj ostatni wzór
+        if current_pattern:
+            patterns.append(current_pattern)
+        
+        # Filtruj wzory które mają mniej niż 5 punktów (prawdopodobnie szum)
+        patterns = [p for p in patterns if len(p) >= 5]
+        
+        # Jeśli wykryto wzory przez znaczniki końca, użyj ich
+        if len(patterns) > 1:
+            return patterns
+        
+        # Fallback: wykrywanie przez grupowanie współrzędnych
+        return self._detect_patterns_by_clustering(coordinates)
+    
+    def _find_pattern_end_markers(self) -> List[int]:
+        """Znajduje pozycje znaczników końca wzoru w danych binarnych"""
+        end_markers = []
+        
+        # Szukamy typowych znaczników końca wzoru
+        markers = [
+            b'\x03\x80',  # 0x8003 - koniec wzoru
+            b'\x13\x80',  # 0x8013 - koniec wzoru z obcięciem
+            b'\x23\x80',  # 0x8023 - koniec wzoru z przeskokiem
+            b'\x33\x80',  # 0x8033 - koniec wzoru z zatrzymaniem
+        ]
+        
+        for marker in markers:
+            pos = 0
+            while pos < len(self.data):
+                found = self.data.find(marker, pos)
+                if found == -1:
+                    break
+                end_markers.append(found)
+                pos = found + 1
+        
+        return sorted(end_markers)
+    
+    def _detect_patterns_by_clustering(self, coordinates: List[Tuple[int, int, int]]) -> List[List[Tuple[int, int, int]]]:
+        """Wykrywa wzory przez grupowanie współrzędnych"""
+        if not coordinates:
+            return []
+        
+        # Groupuj punkty według odległości od siebie
+        patterns = []
+        current_pattern = []
+        
+        for i, (x, y, cmd) in enumerate(coordinates):
+            if not current_pattern:
+                current_pattern.append((x, y, cmd))
+                continue
+            
+            # Sprawdź średnią odległość od punktów w aktualnym wzorze
+            distances = []
+            for px, py, _ in current_pattern[-10:]:  # Ostatnie 10 punktów
+                dist = ((x - px)**2 + (y - py)**2)**0.5
+                distances.append(dist)
+            
+            avg_distance = sum(distances) / len(distances) if distances else 0
+            
+            # Jeśli punkt jest bardzo daleko od reszty wzoru, zacznij nowy wzór
+            if avg_distance > 1000 and len(current_pattern) > 20:  # 100mm średnia odległość
+                patterns.append(current_pattern)
+                current_pattern = [(x, y, cmd)]
+            else:
+                current_pattern.append((x, y, cmd))
+        
+        # Dodaj ostatni wzór
+        if current_pattern:
+            patterns.append(current_pattern)
+        
+        # Filtruj wzory które mają mniej niż 10 punktów
+        patterns = [p for p in patterns if len(p) >= 10]
+        
+        return patterns if len(patterns) > 1 else [coordinates]
+    
+    def _analyze_single_pattern(self, coordinates: List[Tuple[int, int, int]], pattern_index: int) -> Dict[str, Any]:
+        """Analizuje pojedynczy wzór"""
+        if not coordinates:
+            return {}
+        
+        x_coords = [c[0] for c in coordinates]
+        y_coords = [c[1] for c in coordinates]
+        
+        pattern_info = {
+            'pattern_index': pattern_index,
+            'stitch_count': len(coordinates),
+            'dimensions': {
                 'width': (max(x_coords) - min(x_coords)) / 10.0,  # w mm
                 'height': (max(y_coords) - min(y_coords)) / 10.0,  # w mm
                 'x_min': min(x_coords) / 10.0,
@@ -382,19 +530,29 @@ class PXFAnalyzer:
                 'y_min': min(y_coords) / 10.0,
                 'y_max': max(y_coords) / 10.0
             }
-            
-            # Średnia długość ściegu
-            distances = []
-            for i in range(1, min(len(coordinates), 500)):
-                x1, y1, _ = coordinates[i-1]
-                x2, y2, _ = coordinates[i]
-                dist = ((x2-x1)**2 + (y2-y1)**2)**0.5
-                distances.append(dist)
-            
-            if distances:
-                stitch_data['average_stitch_length'] = sum(distances) / len(distances) / 10.0  # w mm
+        }
         
-        return stitch_data
+        # Średnia długość ściegu
+        distances = []
+        for i in range(1, min(len(coordinates), 500)):
+            x1, y1, _ = coordinates[i-1]
+            x2, y2, _ = coordinates[i]
+            dist = ((x2-x1)**2 + (y2-y1)**2)**0.5
+            distances.append(dist)
+        
+        if distances:
+            pattern_info['average_stitch_length'] = sum(distances) / len(distances) / 10.0  # w mm
+        
+        # Sprawdź czy wzór ma rozsądne wymiary
+        width = pattern_info['dimensions']['width']
+        height = pattern_info['dimensions']['height']
+        
+        if width > 1000 or height > 1000:  # Ponad 1 metr
+            pattern_info['dimension_warning'] = 'Bardzo duże wymiary - możliwe błędne odczytanie'
+        elif width < 1 or height < 1:  # Mniej niż 1mm
+            pattern_info['dimension_warning'] = 'Bardzo małe wymiary - możliwe błędne odczytanie'
+        
+        return pattern_info
     
     def _extract_machine_settings(self) -> Dict[str, Any]:
         """Wyciąga ustawienia maszyny"""

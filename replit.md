@@ -24,6 +24,13 @@ This is a Flask-based web application that allows users to upload and analyze em
   - Comprehensive coordinate pattern analysis
   - Color section extraction with RGB values
   - Format identification and version detection
+  - **Multi-Pattern Detection (July 15, 2025):** Enhanced to handle files with multiple embroidery patterns:
+    - Detects pattern end markers (0x8003, 0x8013, 0x8023, 0x8033)
+    - Analyzes jump distances between stitches to identify pattern boundaries
+    - Clustering algorithm for pattern separation
+    - Individual analysis for each detected pattern with dimensions and stitch counts
+    - Warning system for unusual dimensions (very large or very small patterns)
+    - Combined total dimensions display for multi-pattern files
 
 Note: Some .pxf variants (like PMLPXF format) may not be fully supported by pyembroidery and users are advised to convert such files to more compatible formats like .dst, .pes, or .jef.
 

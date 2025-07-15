@@ -526,6 +526,10 @@
                                     <li><strong>Znalezione współrzędne:</strong> {{ value }}</li>
                                     {% elif key == 'average_stitch_length' %}
                                     <li><strong>Średnia długość ściegu:</strong> {{ value }} mm</li>
+                                    {% elif key == 'patterns_detected' %}
+                                    <li><strong>Wykryte wzory:</strong> {{ value }}</li>
+                                    {% elif key == 'multi_pattern_warning' and value %}
+                                    <li><span class="badge bg-warning">Uwaga: Wykryto wiele wzorów!</span></li>
                                     {% endif %}
                                     {% endfor %}
                                 </ul>
@@ -547,6 +551,57 @@
                                         {% endfor %}
                                     </table>
                                 </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Multi-Pattern Analysis -->
+                        {% if analysis.advanced_pxf_analysis.stitch_data.multi_pattern_warning %}
+                        <div class="row mt-4">
+                            <div class="col-md-12">
+                                <div class="alert alert-warning">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                    <strong>Wykryto wiele wzorów w jednym pliku!</strong> 
+                                    Plik zawiera {{ analysis.advanced_pxf_analysis.stitch_data.patterns_detected }} oddzielnych wzorów.
+                                </div>
+                                
+                                <h6 class="text-warning mt-3">Analiza poszczególnych wzorów:</h6>
+                                {% for pattern in analysis.advanced_pxf_analysis.stitch_data.pattern_analysis %}
+                                <div class="card mb-3 border-warning">
+                                    <div class="card-header bg-warning text-dark">
+                                        <h6 class="card-title mb-0">
+                                            <i class="fas fa-pattern me-2"></i>
+                                            Wzór {{ pattern.pattern_index + 1 }}
+                                        </h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <strong>Wymiary:</strong> {{ "%.1f"|format(pattern.dimensions.width) }} × {{ "%.1f"|format(pattern.dimensions.height) }} mm<br>
+                                                <strong>Liczba ściegów:</strong> {{ pattern.stitch_count }}<br>
+                                                {% if pattern.average_stitch_length %}
+                                                <strong>Średnia długość ściegu:</strong> {{ "%.1f"|format(pattern.average_stitch_length) }} mm<br>
+                                                {% endif %}
+                                            </div>
+                                            <div class="col-md-6">
+                                                <strong>Pozycja:</strong><br>
+                                                X: {{ "%.1f"|format(pattern.dimensions.x_min) }} do {{ "%.1f"|format(pattern.dimensions.x_max) }} mm<br>
+                                                Y: {{ "%.1f"|format(pattern.dimensions.y_min) }} do {{ "%.1f"|format(pattern.dimensions.y_max) }} mm<br>
+                                                {% if pattern.dimension_warning %}
+                                                <span class="badge bg-danger">{{ pattern.dimension_warning }}</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                                
+                                {% if analysis.advanced_pxf_analysis.stitch_data.total_dimensions %}
+                                <div class="alert alert-info">
+                                    <strong>Łączne wymiary wszystkich wzorów:</strong>
+                                    {{ "%.1f"|format(analysis.advanced_pxf_analysis.stitch_data.total_dimensions.width) }} × {{ "%.1f"|format(analysis.advanced_pxf_analysis.stitch_data.total_dimensions.height) }} mm
+                                </div>
+                                {% endif %}
                             </div>
                         </div>
                         {% endif %}
