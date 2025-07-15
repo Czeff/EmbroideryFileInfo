@@ -9,6 +9,13 @@ This is a Flask-based web application that allows users to upload and analyze em
 - Performance metrics (stitch density, estimated embroidery time)
 - Technical specifications (pattern complexity, software information)
 - Enhanced PXF file analysis with binary pattern recognition
+- **Alternative Analysis Methods (July 15, 2025):** Implemented multiple fallback analysis methods for PXF files including:
+  - XML/structured content parsing
+  - Key-value pair extraction
+  - Binary pattern recognition for float values
+  - String pattern analysis for embroidery terms
+  - Coordinate pattern analysis for stitch data
+  - File structure analysis for PMLPXF headers
 
 Note: Some .pxf variants (like PMLPXF format) may not be fully supported by pyembroidery and users are advised to convert such files to more compatible formats like .dst, .pes, or .jef.
 

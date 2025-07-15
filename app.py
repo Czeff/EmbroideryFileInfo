@@ -236,8 +236,142 @@ def try_pxf_analysis(file_path):
         logging.error(f"Error in PXF binary analysis: {e}")
         return None
 
+def analyze_pxf_with_alternative_methods(data):
+    """Try alternative methods for extracting PXF embroidery data"""
+    results = {
+        'method_used': [],
+        'parameters_found': {},
+        'raw_data_analysis': {}
+    }
+    
+    try:
+        # Method 1: File structure analysis
+        if data.startswith(b'PMLPXF'):
+            results['method_used'].append('PMLPXF header analysis')
+            # Analyze file structure
+            header_size = struct.unpack('<I', data[8:12])[0] if len(data) > 12 else 0
+            if header_size > 0 and header_size < len(data):
+                results['parameters_found']['header_size'] = f"{header_size} bytes"
+        
+        # Method 2: XML-like content search
+        if b'<' in data and b'>' in data:
+            results['method_used'].append('XML/structured content search')
+            # Look for XML-like parameters
+            import re
+            xml_content = data.decode('utf-8', errors='ignore')
+            
+            # Search for common embroidery parameters in XML format
+            xml_patterns = {
+                'density': r'<density[^>]*>([^<]+)</density>',
+                'underlay': r'<underlay[^>]*>([^<]+)</underlay>',
+                'compensation': r'<compensation[^>]*>([^<]+)</compensation>',
+                'angle': r'<angle[^>]*>([^<]+)</angle>',
+                'fill': r'<fill[^>]*>([^<]+)</fill>',
+                'stitch_type': r'<stitch_type[^>]*>([^<]+)</stitch_type>'
+            }
+            
+            for param, pattern in xml_patterns.items():
+                match = re.search(pattern, xml_content, re.IGNORECASE)
+                if match:
+                    results['parameters_found'][param] = match.group(1).strip()
+        
+        # Method 3: Key-value pair search
+        if b'=' in data:
+            results['method_used'].append('Key-value pair analysis')
+            text_content = data.decode('utf-8', errors='ignore')
+            
+            # Search for key=value patterns
+            kv_patterns = {
+                'density': r'density\s*=\s*([^\s\n\r]+)',
+                'underlay': r'underlay\s*=\s*([^\s\n\r]+)',
+                'compensation': r'compensation\s*=\s*([^\s\n\r]+)',
+                'pull_comp': r'pull_compensation\s*=\s*([^\s\n\r]+)',
+                'angle': r'angle\s*=\s*([^\s\n\r]+)',
+                'fill_type': r'fill_type\s*=\s*([^\s\n\r]+)',
+                'stitch_length': r'stitch_length\s*=\s*([^\s\n\r]+)'
+            }
+            
+            for param, pattern in kv_patterns.items():
+                match = re.search(pattern, text_content, re.IGNORECASE)
+                if match:
+                    results['parameters_found'][param] = match.group(1).strip()
+        
+        # Method 4: Binary pattern analysis
+        results['method_used'].append('Binary pattern recognition')
+        
+        # Look for common binary patterns that might indicate parameters
+        for i in range(0, len(data) - 8, 1):
+            # Check for 4-byte float values that might be parameters
+            try:
+                if i + 4 < len(data):
+                    float_val = struct.unpack('<f', data[i:i+4])[0]
+                    # Check if this could be a density value (0.1 to 10 mm)
+                    if 0.1 <= float_val <= 10.0:
+                        results['raw_data_analysis'][f'potential_density_{i}'] = f"{float_val:.2f}"
+                    # Check if this could be an angle (-180 to 180 degrees)
+                    elif -180 <= float_val <= 180:
+                        results['raw_data_analysis'][f'potential_angle_{i}'] = f"{float_val:.1f}°"
+                    # Check if this could be a percentage (0 to 100)
+                    elif 0 <= float_val <= 100:
+                        results['raw_data_analysis'][f'potential_percentage_{i}'] = f"{float_val:.1f}%"
+            except:
+                continue
+        
+        # Method 5: String pattern analysis
+        results['method_used'].append('String pattern analysis')
+        
+        # Look for common embroidery terms in the file
+        embroidery_terms = {
+            'satin': 'Satin stitch detected',
+            'tatami': 'Tatami fill detected',
+            'zigzag': 'Zigzag pattern detected',
+            'underlay': 'Underlay settings detected',
+            'compensation': 'Compensation settings detected',
+            'density': 'Density settings detected',
+            'angle': 'Angle settings detected',
+            'fill': 'Fill settings detected',
+            'outline': 'Outline settings detected'
+        }
+        
+        text_lower = data.decode('utf-8', errors='ignore').lower()
+        for term, description in embroidery_terms.items():
+            if term in text_lower:
+                results['parameters_found'][term] = description
+        
+        # Method 6: Coordinate analysis for stitch patterns
+        results['method_used'].append('Coordinate pattern analysis')
+        
+        coordinates = []
+        for i in range(0, len(data) - 4, 2):
+            try:
+                x = struct.unpack('<h', data[i:i+2])[0]
+                y = struct.unpack('<h', data[i+2:i+4])[0]
+                if -32000 < x < 32000 and -32000 < y < 32000:
+                    coordinates.append((x, y))
+            except:
+                continue
+        
+        if len(coordinates) > 10:
+            # Analyze stitch patterns
+            distances = []
+            for i in range(1, min(len(coordinates), 100)):
+                x1, y1 = coordinates[i-1]
+                x2, y2 = coordinates[i]
+                dist = ((x2-x1)**2 + (y2-y1)**2)**0.5
+                distances.append(dist)
+            
+            if distances:
+                avg_distance = sum(distances) / len(distances)
+                results['parameters_found']['average_stitch_length'] = f"{avg_distance/10:.1f} mm"
+                results['parameters_found']['stitch_pattern_detected'] = f"{len(coordinates)} coordinate pairs"
+        
+    except Exception as e:
+        results['method_used'].append(f'Error in analysis: {str(e)}')
+    
+    return results
+
 def extract_pxf_embroidery_parameters(data):
-    """Extract embroidery parameters from PXF file"""
+    """Extract embroidery parameters from PXF file using multiple analysis methods"""
     params = {
         'stitch_density': 'Unknown',
         'underlay_type': 'Unknown',
@@ -247,27 +381,80 @@ def extract_pxf_embroidery_parameters(data):
         'fill_pattern': 'Unknown',
         'outline_width': 'Unknown',
         'automatic_underlay': 'Unknown',
-        'density_settings': {}
+        'density_settings': {},
+        'analysis_method': 'Multi-method analysis'
     }
     
+    # Try alternative analysis methods
+    alternative_results = analyze_pxf_with_alternative_methods(data)
+    params['alternative_analysis'] = alternative_results
+    
     try:
-        # Look for density settings in PXF files
-        # PXF stores density information in specific byte patterns
-        for i in range(0, len(data) - 16):
-            chunk = data[i:i+16]
-            
-            # Look for density markers (common in Tajima PXF files)
-            if b'DENSITY' in chunk or b'density' in chunk:
-                try:
-                    # Try to extract density value from surrounding bytes
-                    density_bytes = data[i+8:i+12]
-                    if len(density_bytes) == 4:
-                        import struct
-                        density_val = struct.unpack('<I', density_bytes)[0]
-                        if 10 <= density_val <= 1000:  # Reasonable density range
-                            params['stitch_density'] = f"{density_val/100:.1f} mm"
-                except:
-                    pass
+        # Method 1: Look for text-based parameters in PXF files
+        text_content = data.decode('utf-8', errors='ignore')
+        
+        # Method 2: Hex analysis for structured data
+        hex_data = data.hex()
+        
+        # Method 3: Try multiple density extraction methods
+        density_found = False
+        
+        # Look for density in text content
+        import re
+        density_patterns = [
+            r'density[:\s]*(\d+\.?\d*)',
+            r'DENSITY[:\s]*(\d+\.?\d*)',
+            r'stitch_density[:\s]*(\d+\.?\d*)',
+            r'line_spacing[:\s]*(\d+\.?\d*)',
+            r'spacing[:\s]*(\d+\.?\d*)'
+        ]
+        
+        for pattern in density_patterns:
+            match = re.search(pattern, text_content, re.IGNORECASE)
+            if match:
+                density_val = float(match.group(1))
+                if 0.1 <= density_val <= 50:  # Reasonable density range in mm
+                    params['stitch_density'] = f"{density_val:.1f} mm"
+                    density_found = True
+                    break
+        
+        # Look for density settings in PXF files using binary search
+        if not density_found:
+            for i in range(0, len(data) - 16):
+                chunk = data[i:i+16]
+                
+                # Look for density markers (common in Tajima PXF files)
+                if b'DENSITY' in chunk or b'density' in chunk:
+                    try:
+                        # Try to extract density value from surrounding bytes
+                        density_bytes = data[i+8:i+12]
+                        if len(density_bytes) == 4:
+                            import struct
+                            density_val = struct.unpack('<I', density_bytes)[0]
+                            if 10 <= density_val <= 1000:  # Reasonable density range
+                                params['stitch_density'] = f"{density_val/100:.1f} mm"
+                                density_found = True
+                                break
+                    except:
+                        pass
+                
+                # Alternative: look for float values near density markers
+                if not density_found and (b'dens' in chunk.lower() or b'spac' in chunk.lower()):
+                    try:
+                        # Try to find float values in nearby bytes
+                        for offset in range(-20, 21, 4):
+                            if i + offset >= 0 and i + offset + 4 < len(data):
+                                test_bytes = data[i+offset:i+offset+4]
+                                float_val = struct.unpack('<f', test_bytes)[0]
+                                if 0.1 <= float_val <= 20:  # Reasonable density range
+                                    params['stitch_density'] = f"{float_val:.1f} mm"
+                                    density_found = True
+                                    break
+                    except:
+                        continue
+                
+                if density_found:
+                    break
             
             # Look for underlay settings
             if b'UNDERLAY' in chunk or b'underlay' in chunk:

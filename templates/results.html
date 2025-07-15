@@ -270,6 +270,33 @@
                                 </div>
                             </div>
                         </div>
+                        
+                        <!-- Alternative Analysis Results -->
+                        {% if analysis.embroidery_parameters.alternative_analysis %}
+                        <div class="mt-4">
+                            <h6 class="text-info">Alternatywne metody analizy:</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <small class="text-muted">Użyte metody:</small>
+                                    <ul class="list-unstyled small">
+                                        {% for method in analysis.embroidery_parameters.alternative_analysis.method_used %}
+                                        <li><i class="fas fa-search text-primary me-1"></i>{{ method }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                                <div class="col-md-6">
+                                    {% if analysis.embroidery_parameters.alternative_analysis.parameters_found %}
+                                    <small class="text-muted">Znalezione parametry:</small>
+                                    <ul class="list-unstyled small">
+                                        {% for key, value in analysis.embroidery_parameters.alternative_analysis.parameters_found.items() %}
+                                        <li><i class="fas fa-info-circle text-success me-1"></i><strong>{{ key }}:</strong> {{ value }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
