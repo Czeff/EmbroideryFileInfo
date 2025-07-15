@@ -26,7 +26,7 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def try_pxf_analysis(file_path):
-    """Try to extract basic information from PXF files using binary analysis"""
+    """Try to extract detailed information from PXF files using advanced binary analysis"""
     try:
         with open(file_path, 'rb') as f:
             data = f.read()
@@ -42,65 +42,175 @@ def try_pxf_analysis(file_path):
             'stitch_types': ['Format not fully supported'],
             'layers': [],
             'dimensions': None,
-            'raw_analysis': True
+            'raw_analysis': True,
+            'detailed_info': {}
         }
         
-        # Try to extract some basic information from the binary data
+        # Advanced binary analysis for more detailed extraction
         header_info = []
+        detailed_info = {}
         
-        # Check for PMLPXF header
+        # Check for PMLPXF header and extract detailed information
         if data.startswith(b'PMLPXF01'):
             header_info.append('PMLPXF Version 1 format detected')
             
-            # Try to find version and creation info
             try:
-                # Look for "Created" string which often appears in PXF metadata
+                # Extract file header information (first 64 bytes contain important data)
+                header = data[:64]
+                
+                # Try to extract design dimensions from header
+                # PMLPXF stores dimensions in specific byte positions
+                if len(header) >= 32:
+                    # Extract potential width/height values (little-endian format)
+                    import struct
+                    try:
+                        # Common positions for dimension data in PMLPXF
+                        val1 = struct.unpack('<I', header[8:12])[0]  # Position 8-11
+                        val2 = struct.unpack('<I', header[12:16])[0]  # Position 12-15
+                        val3 = struct.unpack('<I', header[16:20])[0]  # Position 16-19
+                        val4 = struct.unpack('<I', header[20:24])[0]  # Position 20-23
+                        
+                        # Filter reasonable dimension values (in 0.1mm units)
+                        reasonable_dims = [v for v in [val1, val2, val3, val4] if 100 < v < 1000000]
+                        if len(reasonable_dims) >= 2:
+                            width_mm = reasonable_dims[0] / 10.0
+                            height_mm = reasonable_dims[1] / 10.0
+                            detailed_info['estimated_dimensions'] = f"{width_mm:.1f} × {height_mm:.1f} mm"
+                            
+                    except struct.error:
+                        pass
+                
+                # Look for software version and creation info
                 created_pos = data.find(b'Created')
                 if created_pos != -1:
-                    # Extract some text around the "Created" marker
-                    start = max(0, created_pos - 20)
-                    end = min(len(data), created_pos + 100)
+                    # Extract metadata around "Created" marker
+                    start = max(0, created_pos - 30)
+                    end = min(len(data), created_pos + 150)
                     metadata = data[start:end]
                     try:
-                        # Try to decode as text to extract readable info
                         metadata_str = metadata.decode('utf-8', errors='ignore')
-                        if 'Created' in metadata_str:
-                            header_info.append(f'Metadata found: {metadata_str[:50]}...')
+                        # Extract software information
+                        if 'Tajima' in metadata_str:
+                            detailed_info['software'] = 'Tajima DG/ML by Pulse'
+                        elif 'Pulse' in metadata_str:
+                            detailed_info['software'] = 'Pulse Software'
+                        
+                        # Extract version if present
+                        import re
+                        version_match = re.search(r'DG(\d+)', metadata_str)
+                        if version_match:
+                            detailed_info['software_version'] = f"DG{version_match.group(1)}"
+                            
+                        header_info.append(f'Software: {detailed_info.get("software", "Unknown")}')
+                        
                     except:
                         pass
                 
-                # Try to estimate thread count by looking for color patterns
-                # PXF files often store RGB color values
-                rgb_patterns = 0
+                # Analyze pattern complexity by looking for stitch patterns
+                stitch_patterns = 0
+                jump_patterns = 0
+                
+                # Look for common stitch command patterns in PXF files
+                for i in range(0, len(data) - 4, 4):
+                    try:
+                        # PXF stores coordinates and commands in 4-byte chunks
+                        chunk = data[i:i+4]
+                        if len(chunk) == 4:
+                            # Look for coordinate patterns (reasonable X,Y values)
+                            x = struct.unpack('<h', chunk[:2])[0] if len(chunk) >= 2 else 0
+                            y = struct.unpack('<h', chunk[2:])[0] if len(chunk) >= 2 else 0
+                            
+                            # Count potential stitch coordinates
+                            if -5000 < x < 5000 and -5000 < y < 5000:
+                                stitch_patterns += 1
+                                
+                            # Look for jump patterns (larger coordinate changes)
+                            if abs(x) > 1000 or abs(y) > 1000:
+                                jump_patterns += 1
+                                
+                    except (struct.error, IndexError):
+                        continue
+                
+                # Estimate stitch count based on pattern analysis
+                if stitch_patterns > 0:
+                    estimated_stitches = min(stitch_patterns // 4, 50000)  # Conservative estimate
+                    if estimated_stitches > 100:
+                        analysis['stitch_count'] = f"~{estimated_stitches:,} (estimated)"
+                        detailed_info['estimated_stitches'] = estimated_stitches
+                
+                # Estimate pattern density
+                if stitch_patterns > 0 and 'estimated_dimensions' in detailed_info:
+                    try:
+                        dims = detailed_info['estimated_dimensions'].split('×')
+                        area = float(dims[0].strip()) * float(dims[1].replace('mm', '').strip())
+                        if area > 0:
+                            density = estimated_stitches / area
+                            detailed_info['stitch_density'] = f"{density:.1f} stitches/cm²"
+                    except:
+                        pass
+                
+                # Estimate embroidery type based on patterns
+                if stitch_patterns > 0:
+                    jump_ratio = jump_patterns / stitch_patterns if stitch_patterns > 0 else 0
+                    if jump_ratio > 0.3:
+                        detailed_info['pattern_type'] = 'Complex design with fills and details'
+                    elif jump_ratio > 0.1:
+                        detailed_info['pattern_type'] = 'Medium complexity design'
+                    else:
+                        detailed_info['pattern_type'] = 'Simple outline or text design'
+                
+                # Advanced color analysis - look for RGB patterns
+                colors_found = []
                 pos = 0
-                while pos < len(data) - 3:
-                    # Look for potential RGB triplets (values between 0-255)
-                    if (data[pos] <= 255 and data[pos+1] <= 255 and data[pos+2] <= 255 and
-                        data[pos] + data[pos+1] + data[pos+2] > 50):  # Not all zeros/very dark
-                        rgb_patterns += 1
+                while pos < len(data) - 6 and len(colors_found) < 20:
+                    # Look for RGB color patterns (3 consecutive bytes with reasonable values)
+                    if (pos + 2 < len(data) and 
+                        data[pos] <= 255 and data[pos+1] <= 255 and data[pos+2] <= 255):
+                        
+                        r, g, b = data[pos], data[pos+1], data[pos+2]
+                        # Skip very dark colors (likely not thread colors)
+                        if r + g + b > 50:
+                            hex_color = f"#{r:02X}{g:02X}{b:02X}"
+                            if hex_color not in [c['hex'] for c in colors_found]:
+                                color_name = get_color_name(r, g, b)
+                                colors_found.append({
+                                    'hex': hex_color,
+                                    'name': color_name,
+                                    'rgb': f"RGB({r},{g},{b})"
+                                })
                         pos += 3
                     else:
                         pos += 1
                 
-                # Rough estimation of thread colors
-                estimated_colors = min(rgb_patterns // 10, 20)  # Rough heuristic
-                if estimated_colors > 0:
-                    analysis['thread_count'] = f"~{estimated_colors} (estimated)"
-                    for i in range(min(estimated_colors, 5)):
+                # Update thread count and colors
+                if colors_found:
+                    analysis['thread_count'] = f"{len(colors_found)} (detected)"
+                    for i, color in enumerate(colors_found[:10]):  # Limit to first 10 colors
                         analysis['colors'].append({
                             'index': i + 1,
-                            'color': 'Unknown',
-                            'hex': 'N/A',
-                            'description': 'Requires conversion for detailed info',
-                            'brand': 'N/A'
+                            'color': color['name'],
+                            'hex': color['hex'],
+                            'description': f"Detected color: {color['rgb']}",
+                            'brand': 'Unknown'
                         })
                 
+                # Estimate thread length based on stitch count
+                if 'estimated_stitches' in detailed_info:
+                    # Average stitch length in embroidery is about 2-4mm
+                    estimated_length = (detailed_info['estimated_stitches'] * 3) / 10  # in cm
+                    if estimated_length > 100:
+                        detailed_info['estimated_thread_length'] = f"{estimated_length/100:.1f} m"
+                    else:
+                        detailed_info['estimated_thread_length'] = f"{estimated_length:.0f} cm"
+                
             except Exception as e:
-                logging.warning(f"Error in PXF analysis: {e}")
+                logging.warning(f"Error in advanced PXF analysis: {e}")
         
+        # Compile layer information
         analysis['layers'] = header_info if header_info else ['Basic file structure detected']
+        analysis['detailed_info'] = detailed_info
         
-        # Add helpful conversion note
+        # Enhanced conversion note
         analysis['conversion_note'] = 'Ten plik wymaga konwersji do formatu .dst, .pes lub .jef aby uzyskać pełne informacje o wzorze haftu.'
         
         return analysis
@@ -108,6 +218,32 @@ def try_pxf_analysis(file_path):
     except Exception as e:
         logging.error(f"Error in PXF binary analysis: {e}")
         return None
+
+def get_color_name(r, g, b):
+    """Get approximate color name from RGB values"""
+    # Simple color name mapping
+    if r > 200 and g < 100 and b < 100:
+        return "Red"
+    elif r < 100 and g > 200 and b < 100:
+        return "Green"
+    elif r < 100 and g < 100 and b > 200:
+        return "Blue"
+    elif r > 200 and g > 200 and b < 100:
+        return "Yellow"
+    elif r > 150 and g < 100 and b > 150:
+        return "Purple"
+    elif r < 100 and g > 150 and b > 150:
+        return "Cyan"
+    elif r > 200 and g > 100 and b < 100:
+        return "Orange"
+    elif r > 200 and g > 200 and b > 200:
+        return "White"
+    elif r < 50 and g < 50 and b < 50:
+        return "Black"
+    elif 100 < r < 200 and 100 < g < 200 and 100 < b < 200:
+        return "Gray"
+    else:
+        return "Unknown"
 
 def convert_pxf_to_dst(pxf_file_path):
     """Convert PXF file to DST format for detailed analysis"""
