@@ -1,0 +1,170 @@
+import os
+import logging
+import tempfile
+from flask import Flask, render_template, request, redirect, url_for, flash
+from werkzeug.utils import secure_filename
+import pyembroidery
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+
+# Create Flask app
+app = Flask(__name__)
+app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key-change-in-production")
+
+# Configuration
+UPLOAD_FOLDER = tempfile.gettempdir()
+ALLOWED_EXTENSIONS = {'pxf'}
+MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
+
+def allowed_file(filename):
+    """Check if file has allowed extension"""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def analyze_embroidery_file(file_path):
+    """Analyze embroidery file using pyembroidery and extract information"""
+    try:
+        # Read the embroidery file
+        pattern = pyembroidery.read(file_path)
+        
+        if pattern is None:
+            return None, "Failed to read embroidery file"
+        
+        # Extract basic information
+        analysis = {
+            'filename': os.path.basename(file_path),
+            'stitch_count': pattern.count_stitch_commands(),
+            'thread_count': len(pattern.threadlist),
+            'colors': [],
+            'stitch_types': [],
+            'layers': [],
+            'dimensions': None
+        }
+        
+        # Extract thread colors
+        for i, thread in enumerate(pattern.threadlist):
+            color_info = {
+                'index': i + 1,
+                'color': thread.color if thread.color else 'Unknown',
+                'hex': thread.hex if hasattr(thread, 'hex') and thread.hex else 'N/A',
+                'description': thread.description if thread.description else 'N/A',
+                'brand': thread.brand if thread.brand else 'N/A'
+            }
+            analysis['colors'].append(color_info)
+        
+        # Extract stitch types
+        stitch_types = set()
+        for stitch in pattern.stitches:
+            if len(stitch) >= 3:  # x, y, command
+                command = stitch[2]
+                if command == pyembroidery.STITCH:
+                    stitch_types.add('Normal Stitch')
+                elif command == pyembroidery.JUMP:
+                    stitch_types.add('Jump')
+                elif command == pyembroidery.MOVE:
+                    stitch_types.add('Move')
+                elif command == pyembroidery.COLOR_CHANGE:
+                    stitch_types.add('Color Change')
+                elif command == pyembroidery.TRIM:
+                    stitch_types.add('Trim')
+                elif command == pyembroidery.END:
+                    stitch_types.add('End')
+                else:
+                    stitch_types.add(f'Command {command}')
+        
+        analysis['stitch_types'] = list(stitch_types)
+        
+        # Get pattern dimensions
+        extends = pattern.extends()
+        if extends:
+            width = extends[2] - extends[0]  # max_x - min_x
+            height = extends[3] - extends[1]  # max_y - min_y
+            analysis['dimensions'] = {
+                'width': round(width / 10, 2),  # Convert to mm (assuming 0.1mm units)
+                'height': round(height / 10, 2),
+                'min_x': round(extends[0] / 10, 2),
+                'min_y': round(extends[1] / 10, 2),
+                'max_x': round(extends[2] / 10, 2),
+                'max_y': round(extends[3] / 10, 2)
+            }
+        
+        # Try to extract layer information (if available)
+        # Note: Layer information might not be available in all PXF files
+        if hasattr(pattern, 'extras') and pattern.extras:
+            for key, value in pattern.extras.items():
+                if 'layer' in key.lower():
+                    analysis['layers'].append(f"{key}: {value}")
+        
+        if not analysis['layers']:
+            analysis['layers'] = ['Layer information not available in this file']
+        
+        return analysis, None
+        
+    except Exception as e:
+        logging.error(f"Error analyzing embroidery file: {str(e)}")
+        return None, f"Error analyzing file: {str(e)}"
+
+@app.route('/')
+def index():
+    """Main page with upload form"""
+    return render_template('index.html')
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
+    """Handle file upload and analysis"""
+    if 'file' not in request.files:
+        flash('No file selected', 'error')
+        return redirect(url_for('index'))
+    
+    file = request.files['file']
+    
+    if file.filename == '':
+        flash('No file selected', 'error')
+        return redirect(url_for('index'))
+    
+    if not allowed_file(file.filename):
+        flash('Invalid file type. Please upload a .pxf file.', 'error')
+        return redirect(url_for('index'))
+    
+    try:
+        # Save file temporarily
+        filename = secure_filename(file.filename)
+        temp_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(temp_path)
+        
+        # Analyze the file
+        analysis, error = analyze_embroidery_file(temp_path)
+        
+        # Clean up temporary file
+        try:
+            os.remove(temp_path)
+        except OSError:
+            logging.warning(f"Could not remove temporary file: {temp_path}")
+        
+        if error:
+            flash(f'Error processing file: {error}', 'error')
+            return redirect(url_for('index'))
+        
+        if analysis is None:
+            flash('Could not analyze the embroidery file', 'error')
+            return redirect(url_for('index'))
+        
+        return render_template('results.html', analysis=analysis)
+        
+    except Exception as e:
+        logging.error(f"Upload error: {str(e)}")
+        flash(f'An error occurred while processing the file: {str(e)}', 'error')
+        return redirect(url_for('index'))
+
+@app.errorhandler(413)
+def too_large(e):
+    """Handle file too large error"""
+    flash('File is too large. Maximum size is 16MB.', 'error')
+    return redirect(url_for('index'))
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
