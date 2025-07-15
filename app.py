@@ -51,9 +51,9 @@ def analyze_embroidery_file(file_path):
             
             if file_ext == '.pxf':
                 if header.startswith(b'PMLPXF'):
-                    return None, "Ten plik .pxf używa wariantu formatu Pulse, który nie jest w pełni obsługiwany przez pyembroidery. Spróbuj przekonwertować plik do formatu .dst, .pes lub .jef."
+                    return None, "pxf_unsupported_variant"
                 else:
-                    return None, "Plik .pxf ma nieoczekiwaną strukturę. Może być uszkodzony lub używać niestandardowego formatu."
+                    return None, "pxf_invalid_structure"
             else:
                 return None, f"Nie można odczytać pliku {file_ext}. Plik może być uszkodzony lub używać nieobsługiwanego wariantu formatu."
         
@@ -171,11 +171,20 @@ def upload_file():
             logging.warning(f"Could not remove temporary file: {temp_path}")
         
         if error:
-            flash(f'Error processing file: {error}', 'error')
-            return redirect(url_for('index'))
+            if error == 'pxf_unsupported_variant':
+                return render_template('pxf_error.html', 
+                                     error_type='unsupported_variant',
+                                     filename=filename)
+            elif error == 'pxf_invalid_structure':
+                return render_template('pxf_error.html', 
+                                     error_type='invalid_structure',
+                                     filename=filename)
+            else:
+                flash(f'Błąd podczas przetwarzania pliku: {error}', 'error')
+                return redirect(url_for('index'))
         
         if analysis is None:
-            flash('Could not analyze the embroidery file', 'error')
+            flash('Nie można przeanalizować pliku hafciarskiego', 'error')
             return redirect(url_for('index'))
         
         return render_template('results.html', analysis=analysis)

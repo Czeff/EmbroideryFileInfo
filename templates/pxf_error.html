@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pl" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Problem z plikiem PXF - Embroidery Analyzer</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h1 class="display-5">
+                        <i class="fas fa-exclamation-triangle text-warning me-3"></i>
+                        Problem z plikiem PXF
+                    </h1>
+                    <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>
+                        Powrót
+                    </a>
+                </div>
+                <p class="lead text-muted">Plik: <strong>{{ filename }}</strong></p>
+            </div>
+        </div>
+
+        <!-- Error Explanation -->
+        <div class="row mb-4">
+            <div class="col">
+                {% if error_type == 'unsupported_variant' %}
+                <div class="alert alert-warning">
+                    <h4 class="alert-heading">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Nieobsługiwany wariant formatu PXF
+                    </h4>
+                    <p class="mb-0">
+                        Ten plik używa wariantu formatu PXF (PMLPXF), który nie jest w pełni obsługiwany 
+                        przez bibliotekę pyembroidery. Aby przeanalizować ten wzór, przekonwertuj go 
+                        na jeden z kompatybilnych formatów.
+                    </p>
+                </div>
+                {% else %}
+                <div class="alert alert-danger">
+                    <h4 class="alert-heading">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Nieprawidłowa struktura pliku PXF
+                    </h4>
+                    <p class="mb-0">
+                        Plik PXF ma nieoczekiwaną strukturę. Może być uszkodzony lub używać 
+                        niestandardowego formatu. Spróbuj przekonwertować go lub użyć innego pliku.
+                    </p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Alternative Upload -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title mb-0">
+                            <i class="fas fa-upload me-2"></i>
+                            Prześlij inny plik
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            Jeśli masz ten sam wzór w innym formacie, prześlij go tutaj:
+                        </p>
+                        
+                        <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data" id="alternativeUploadForm">
+                            <div class="mb-3">
+                                <label for="altFile" class="form-label">Wybierz plik hafciarski:</label>
+                                <input type="file" 
+                                       class="form-control" 
+                                       id="altFile" 
+                                       name="file" 
+                                       accept=".dst,.pes,.jef,.exp,.vp3,.hus,.xxx"
+                                       required>
+                                <div class="form-text">
+                                    <i class="fas fa-info-circle me-1"></i>
+                                    Obsługiwane formaty: .dst, .pes, .jef, .exp, .vp3, .hus, .xxx
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-analyze me-2"></i>
+                                Analizuj plik
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conversion Instructions -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="card-title mb-0">
+                            <i class="fas fa-tools me-2"></i>
+                            Konwersja pliku PXF
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            Aby przekonwertować plik .pxf na obsługiwany format, użyj jednego z tych narzędzi:
+                        </p>
+                        
+                        <div class="list-group">
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">
+                                        <i class="fas fa-gift me-2 text-success"></i>
+                                        Dime Toolshed
+                                    </h6>
+                                    <small class="badge bg-success">Darmowe</small>
+                                </div>
+                                <p class="mb-1 small">
+                                    Darmowe narzędzie do konwersji plików hafciarskich. Obsługuje 20+ formatów 
+                                    w tym PXF→DST, PES, JEF.
+                                </p>
+                                <small class="text-muted">
+                                    <a href="https://www.data7consultancy.com/embroidery-design-converter.asp" target="_blank" class="text-decoration-none">
+                                        Pobierz Dime Toolshed
+                                        <i class="fas fa-external-link-alt ms-1"></i>
+                                    </a>
+                                </small>
+                            </div>
+                            
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">
+                                        <i class="fas fa-gift me-2 text-info"></i>
+                                        BERNINA ArtLink 9
+                                    </h6>
+                                    <small class="badge bg-info">Darmowe</small>
+                                </div>
+                                <p class="mb-1 small">
+                                    Darmowe oprogramowanie BERNINA do konwersji formatów hafciarskich.
+                                    Wymaga rejestracji.
+                                </p>
+                                <small class="text-muted">
+                                    <a href="https://www.bernina.com/pl-PL/Hafciarka-PL/Oprogramowanie-PL/BERNINA-ArtLink" target="_blank" class="text-decoration-none">
+                                        Pobierz ArtLink 9
+                                        <i class="fas fa-external-link-alt ms-1"></i>
+                                    </a>
+                                </small>
+                            </div>
+                            
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">
+                                        <i class="fas fa-external-link-alt me-2 text-primary"></i>
+                                        Embrilliance Essentials
+                                    </h6>
+                                    <small class="text-warning">Płatne</small>
+                                </div>
+                                <p class="mb-1 small">
+                                    Profesjonalne oprogramowanie do haftu z obsługą konwersji formatów.
+                                    Otwórz plik .pxf i zapisz jako .dst lub .pes.
+                                </p>
+                                <small class="text-muted">
+                                    <a href="https://www.embrilliance.com/" target="_blank" class="text-decoration-none">
+                                        www.embrilliance.com
+                                        <i class="fas fa-external-link-alt ms-1"></i>
+                                    </a>
+                                </small>
+                            </div>
+                            
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">
+                                        <i class="fas fa-external-link-alt me-2 text-warning"></i>
+                                        Wilcom Hatch
+                                    </h6>
+                                    <small class="text-warning">Płatne</small>
+                                </div>
+                                <p class="mb-1 small">
+                                    Zaawansowane oprogramowanie do projektowania haftu z konwersją formatów.
+                                </p>
+                                <small class="text-muted">
+                                    <a href="https://www.wilcom.com/hatch" target="_blank" class="text-decoration-none">
+                                        www.wilcom.com/hatch
+                                        <i class="fas fa-external-link-alt ms-1"></i>
+                                    </a>
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <h6 class="text-muted">Instrukcja konwersji:</h6>
+                            <ol class="small text-muted">
+                                <li>Otwórz plik .pxf w wybranym programie</li>
+                                <li>Wybierz "Zapisz jako" lub "Eksportuj"</li>
+                                <li>Wybierz format .dst, .pes lub .jef</li>
+                                <li>Zapisz plik i prześlij go tutaj</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="row">
+            <div class="col text-center">
+                <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg me-3">
+                    <i class="fas fa-upload me-2"></i>
+                    Prześlij nowy plik
+                </a>
+                <button class="btn btn-outline-secondary btn-lg" onclick="window.history.back()">
+                    <i class="fas fa-arrow-left me-2"></i>
+                    Wróć
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Add file name display when file is selected
+        document.getElementById('altFile').addEventListener('change', function(e) {
+            const fileName = e.target.files[0]?.name;
+            const formText = this.parentElement.querySelector('.form-text');
+            if (fileName) {
+                formText.innerHTML = `<i class="fas fa-file me-1 text-success"></i>Wybrano: ${fileName}`;
+            } else {
+                formText.innerHTML = `<i class="fas fa-info-circle me-1"></i>Obsługiwane formaty: .dst, .pes, .jef, .exp, .vp3, .hus, .xxx`;
+            }
+        });
+
+        // Add loading state to form submission
+        document.getElementById('alternativeUploadForm').addEventListener('submit', function() {
+            const submitBtn = this.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Analizowanie...';
+        });
+    </script>
+</body>
+</html>
