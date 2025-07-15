@@ -245,6 +245,16 @@ class PXFAnalyzer:
         params = {}
         
         try:
+            # Przechowuje wszystkie znalezione parametry
+            all_parameters = {
+                'density_values': [],
+                'underlay_types': [],
+                'compensation_values': [],
+                'fill_angles': [],
+                'stitch_types': [],
+                'thread_tensions': []
+            }
+            
             # Szukamy sekcji parametrów
             for i in range(0, len(self.data) - 32):
                 chunk = self.data[i:i+32]
@@ -254,7 +264,7 @@ class PXFAnalyzer:
                     try:
                         density = struct.unpack('<f', self.data[i+8:i+12])[0]
                         if 0.1 <= density <= 20:
-                            params['stitch_density'] = f"{density:.1f} mm"
+                            all_parameters['density_values'].append(density)
                     except struct.error:
                         pass
                 
@@ -269,7 +279,9 @@ class PXFAnalyzer:
                             3: 'Tatami',
                             4: 'Automatic'
                         }
-                        params['underlay_type'] = underlay_map.get(underlay_type, 'Unknown')
+                        underlay_name = underlay_map.get(underlay_type, 'Unknown')
+                        if underlay_name not in all_parameters['underlay_types']:
+                            all_parameters['underlay_types'].append(underlay_name)
                     except struct.error:
                         pass
                 
@@ -278,7 +290,7 @@ class PXFAnalyzer:
                     try:
                         compensation = struct.unpack('<f', self.data[i+8:i+12])[0]
                         if -50 <= compensation <= 50:
-                            params['pull_compensation'] = f"{compensation:.1f}%"
+                            all_parameters['compensation_values'].append(compensation)
                     except struct.error:
                         pass
                 
@@ -287,9 +299,84 @@ class PXFAnalyzer:
                     try:
                         angle = struct.unpack('<f', self.data[i+8:i+12])[0]
                         if -180 <= angle <= 180:
-                            params['fill_angle'] = f"{angle:.0f}°"
+                            all_parameters['fill_angles'].append(angle)
                     except struct.error:
                         pass
+                
+                # Typy ściegów
+                if b'STITCH_TYPE' in chunk or b'FILL_TYPE' in chunk:
+                    try:
+                        stitch_type = struct.unpack('<I', self.data[i+8:i+12])[0]
+                        stitch_map = {
+                            0: 'Running',
+                            1: 'Satin',
+                            2: 'Fill',
+                            3: 'Tatami',
+                            4: 'Cross Stitch',
+                            5: 'Bean Stitch'
+                        }
+                        stitch_name = stitch_map.get(stitch_type, f'Type {stitch_type}')
+                        if stitch_name not in all_parameters['stitch_types']:
+                            all_parameters['stitch_types'].append(stitch_name)
+                    except struct.error:
+                        pass
+                
+                # Naprężenie nici
+                if b'TENSION' in chunk:
+                    try:
+                        tension = struct.unpack('<f', self.data[i+8:i+12])[0]
+                        if 0 <= tension <= 100:
+                            all_parameters['thread_tensions'].append(tension)
+                    except struct.error:
+                        pass
+            
+            # Przetwarza zebrane parametry
+            if all_parameters['density_values']:
+                densities = all_parameters['density_values']
+                if len(densities) == 1:
+                    params['stitch_density'] = f"{densities[0]:.1f} mm"
+                else:
+                    params['stitch_density'] = f"{min(densities):.1f} - {max(densities):.1f} mm (różne wzory)"
+            
+            if all_parameters['underlay_types']:
+                params['underlay_type'] = ', '.join(all_parameters['underlay_types'])
+            
+            if all_parameters['compensation_values']:
+                compensations = all_parameters['compensation_values']
+                if len(compensations) == 1:
+                    params['pull_compensation'] = f"{compensations[0]:.1f}%"
+                else:
+                    params['pull_compensation'] = f"{min(compensations):.1f}% - {max(compensations):.1f}% (różne wzory)"
+            
+            if all_parameters['fill_angles']:
+                angles = all_parameters['fill_angles']
+                if len(angles) == 1:
+                    params['fill_angle'] = f"{angles[0]:.0f}°"
+                else:
+                    unique_angles = list(set(angles))
+                    if len(unique_angles) <= 3:
+                        params['fill_angle'] = f"{', '.join([f'{a:.0f}°' for a in unique_angles])}"
+                    else:
+                        params['fill_angle'] = f"{len(unique_angles)} różnych kątów"
+            
+            if all_parameters['stitch_types']:
+                params['stitch_types'] = ', '.join(all_parameters['stitch_types'])
+            
+            if all_parameters['thread_tensions']:
+                tensions = all_parameters['thread_tensions']
+                if len(tensions) == 1:
+                    params['thread_tension'] = f"Level {tensions[0]:.0f}"
+                else:
+                    params['thread_tension'] = f"Level {min(tensions):.0f} - {max(tensions):.0f}"
+            
+            # Dodaj informację o liczbie znalezionych parametrów
+            total_params = sum(len(v) for v in all_parameters.values() if isinstance(v, list))
+            params['parameters_found'] = total_params
+            
+            # Jeśli znaleziono wiele różnych wartości, dodaj ostrzeżenie
+            varied_params = sum(1 for v in all_parameters.values() if isinstance(v, list) and len(v) > 1)
+            if varied_params > 0:
+                params['multi_pattern_note'] = f"Znaleziono {varied_params} parametrów z różnymi wartościami - prawdopodobnie wiele wzorów"
         
         except Exception as e:
             params['error'] = f'Błąd wyciągania parametrów: {e}'
@@ -543,6 +630,14 @@ class PXFAnalyzer:
         if distances:
             pattern_info['average_stitch_length'] = sum(distances) / len(distances) / 10.0  # w mm
         
+        # Analiza typu ściegów na podstawie komend
+        stitch_types = self._analyze_pattern_stitch_types(coordinates)
+        pattern_info['stitch_analysis'] = stitch_types
+        
+        # Analiza gęstości ściegów
+        density_info = self._analyze_pattern_density(coordinates)
+        pattern_info['density_analysis'] = density_info
+        
         # Sprawdź czy wzór ma rozsądne wymiary
         width = pattern_info['dimensions']['width']
         height = pattern_info['dimensions']['height']
@@ -552,7 +647,92 @@ class PXFAnalyzer:
         elif width < 1 or height < 1:  # Mniej niż 1mm
             pattern_info['dimension_warning'] = 'Bardzo małe wymiary - możliwe błędne odczytanie'
         
+        # Oszacowanie czasu haftu dla tego wzoru
+        if pattern_info['stitch_count'] > 0:
+            # Założenie: 800 ściegów/minutę
+            estimated_time = pattern_info['stitch_count'] / 800.0
+            pattern_info['estimated_time'] = f"{estimated_time:.1f} min"
+        
         return pattern_info
+    
+    def _analyze_pattern_stitch_types(self, coordinates: List[Tuple[int, int, int]]) -> Dict[str, Any]:
+        """Analizuje typy ściegów dla pojedynczego wzoru"""
+        if not coordinates:
+            return {}
+        
+        command_counts = {}
+        jump_commands = 0
+        stitch_commands = 0
+        special_commands = 0
+        
+        for x, y, cmd in coordinates:
+            if cmd not in command_counts:
+                command_counts[cmd] = 0
+            command_counts[cmd] += 1
+            
+            # Kategoryzacja komend
+            if cmd == 0x0000:  # Normalny ścieg
+                stitch_commands += 1
+            elif cmd in [0x0001, 0x0002, 0x0003]:  # Przeskok
+                jump_commands += 1
+            elif cmd >= 0x8000:  # Specjalne komendy
+                special_commands += 1
+        
+        # Interpretacja typów ściegów
+        stitch_types = []
+        if stitch_commands > 0:
+            stitch_types.append('Running Stitch')
+        if jump_commands > len(coordinates) * 0.1:  # Więcej niż 10% przeskoków
+            stitch_types.append('Jump Stitch')
+        if special_commands > 0:
+            stitch_types.append('Special Commands')
+        
+        return {
+            'stitch_types': stitch_types,
+            'command_distribution': {
+                'normal_stitches': stitch_commands,
+                'jumps': jump_commands,
+                'special': special_commands
+            },
+            'total_commands': len(coordinates)
+        }
+    
+    def _analyze_pattern_density(self, coordinates: List[Tuple[int, int, int]]) -> Dict[str, Any]:
+        """Analizuje gęstość ściegów dla pojedynczego wzoru"""
+        if len(coordinates) < 2:
+            return {}
+        
+        # Oblicz obszar wzoru
+        x_coords = [c[0] for c in coordinates]
+        y_coords = [c[1] for c in coordinates]
+        
+        width = (max(x_coords) - min(x_coords)) / 10.0  # w mm
+        height = (max(y_coords) - min(y_coords)) / 10.0  # w mm
+        area = width * height  # mm²
+        
+        if area > 0:
+            density = len(coordinates) / area  # ściegów/mm²
+            
+            # Interpretacja gęstości
+            if density < 0.1:
+                density_level = 'Bardzo niska'
+            elif density < 0.5:
+                density_level = 'Niska'
+            elif density < 2.0:
+                density_level = 'Średnia'
+            elif density < 5.0:
+                density_level = 'Wysoka'
+            else:
+                density_level = 'Bardzo wysoka'
+            
+            return {
+                'density_value': f"{density:.2f} ściegów/mm²",
+                'density_level': density_level,
+                'area': f"{area:.1f} mm²",
+                'recommended_density': '1-3 ściegów/mm²'
+            }
+        
+        return {}
     
     def _extract_machine_settings(self) -> Dict[str, Any]:
         """Wyciąga ustawienia maszyny"""

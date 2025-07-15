@@ -31,6 +31,13 @@ This is a Flask-based web application that allows users to upload and analyze em
     - Individual analysis for each detected pattern with dimensions and stitch counts
     - Warning system for unusual dimensions (very large or very small patterns)
     - Combined total dimensions display for multi-pattern files
+    - **Per-Pattern Analysis (July 15, 2025):** Added detailed analysis for each pattern in multi-pattern files:
+      - Individual stitch type analysis (running, jump, special commands)
+      - Stitch density calculation (stitches per mm²) with quality assessment
+      - Estimated embroidery time per pattern
+      - Command distribution analysis (normal stitches vs jumps vs special commands)
+      - Enhanced parameter extraction showing value ranges for multi-pattern files
+      - Smart parameter aggregation (single values vs ranges for different patterns)
 
 Note: Some .pxf variants (like PMLPXF format) may not be fully supported by pyembroidery and users are advised to convert such files to more compatible formats like .dst, .pes, or .jef.
 

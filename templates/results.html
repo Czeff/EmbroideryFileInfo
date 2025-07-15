@@ -537,6 +537,43 @@
                             </div>
                         </div>
                         
+                        {% if analysis.advanced_pxf_analysis.embroidery_parameters %}
+                        <div class="row mt-3">
+                            <div class="col-md-12">
+                                <h6 class="text-info">Parametry haftu:</h6>
+                                {% if analysis.advanced_pxf_analysis.embroidery_parameters.multi_pattern_note %}
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    {{ analysis.advanced_pxf_analysis.embroidery_parameters.multi_pattern_note }}
+                                </div>
+                                {% endif %}
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        {% for key, value in analysis.advanced_pxf_analysis.embroidery_parameters.items() %}
+                                        {% if key != 'multi_pattern_note' and key != 'parameters_found' %}
+                                        <tr>
+                                            <td><strong>{{ key|replace('_', ' ')|title }}:</strong></td>
+                                            <td>
+                                                {{ value }}
+                                                {% if 'różne wzory' in value|string %}
+                                                <span class="badge bg-warning ms-2">Multi-pattern</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                        {% endif %}
+                                        {% endfor %}
+                                        {% if analysis.advanced_pxf_analysis.embroidery_parameters.parameters_found %}
+                                        <tr>
+                                            <td><strong>Znalezione parametry:</strong></td>
+                                            <td>{{ analysis.advanced_pxf_analysis.embroidery_parameters.parameters_found }} pozycji</td>
+                                        </tr>
+                                        {% endif %}
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
                         {% if analysis.advanced_pxf_analysis.technical_specs %}
                         <div class="row mt-3">
                             <div class="col-md-12">
@@ -582,6 +619,9 @@
                                                 {% if pattern.average_stitch_length %}
                                                 <strong>Średnia długość ściegu:</strong> {{ "%.1f"|format(pattern.average_stitch_length) }} mm<br>
                                                 {% endif %}
+                                                {% if pattern.estimated_time %}
+                                                <strong>Szacowany czas haftu:</strong> {{ pattern.estimated_time }}<br>
+                                                {% endif %}
                                             </div>
                                             <div class="col-md-6">
                                                 <strong>Pozycja:</strong><br>
@@ -592,6 +632,31 @@
                                                 {% endif %}
                                             </div>
                                         </div>
+                                        
+                                        {% if pattern.stitch_analysis %}
+                                        <div class="row mt-3">
+                                            <div class="col-md-12">
+                                                <h6 class="text-muted">Analiza ściegów dla tego wzoru:</h6>
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <strong>Typy ściegów:</strong> {{ pattern.stitch_analysis.stitch_types|join(', ') }}<br>
+                                                        <strong>Rozkład komend:</strong><br>
+                                                        - Normalne ściegi: {{ pattern.stitch_analysis.command_distribution.normal_stitches }}<br>
+                                                        - Przeskoki: {{ pattern.stitch_analysis.command_distribution.jumps }}<br>
+                                                        - Specjalne: {{ pattern.stitch_analysis.command_distribution.special }}
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        {% if pattern.density_analysis %}
+                                                        <strong>Gęstość ściegów:</strong> {{ pattern.density_analysis.density_value }}<br>
+                                                        <strong>Poziom gęstości:</strong> {{ pattern.density_analysis.density_level }}<br>
+                                                        <strong>Obszar wzoru:</strong> {{ pattern.density_analysis.area }}<br>
+                                                        <small class="text-muted">Zalecana gęstość: {{ pattern.density_analysis.recommended_density }}</small>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endif %}
                                     </div>
                                 </div>
                                 {% endfor %}
