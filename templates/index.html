@@ -18,7 +18,7 @@
                         PXF Embroidery Analyzer
                     </h1>
                     <p class="lead text-muted">
-                        Upload your .pxf embroidery file to analyze thread colors, stitches, and pattern information
+                        Upload your embroidery file (.pxf, .dst, .pes, .jef, .exp, .vp3, .hus, .xxx) to analyze thread colors, stitches, and pattern information
                     </p>
                 </div>
 
@@ -46,16 +46,16 @@
                     <div class="card-body">
                         <form action="{{ url_for('upload_file') }}" method="post" enctype="multipart/form-data">
                             <div class="mb-4">
-                                <label for="file" class="form-label">Select .pxf file:</label>
+                                <label for="file" class="form-label">Select embroidery file:</label>
                                 <input type="file" 
                                        class="form-control form-control-lg" 
                                        id="file" 
                                        name="file" 
-                                       accept=".pxf"
+                                       accept=".pxf,.dst,.pes,.jef,.exp,.vp3,.hus,.xxx"
                                        required>
                                 <div class="form-text">
                                     <i class="fas fa-info-circle me-1"></i>
-                                    Only .pxf (Pulse Embroidery Format) files are supported. Maximum file size: 16MB.
+                                    Supported formats: .pxf, .dst, .pes, .jef, .exp, .vp3, .hus, .xxx. Maximum file size: 16MB.
                                 </div>
                             </div>
                             
@@ -93,11 +93,12 @@
                             <div class="card-body">
                                 <h5 class="card-title">
                                     <i class="fas fa-file-alt text-warning me-2"></i>
-                                    About PXF Format
+                                    Supported Formats
                                 </h5>
                                 <p class="card-text">
-                                    PXF is the Pulse Embroidery Format used by embroidery machines and software. 
-                                    This analyzer extracts detailed information about your embroidery patterns 
+                                    Supports multiple embroidery formats including PXF (Pulse), DST (Tajima), 
+                                    PES (Brother), JEF (Janome), EXP (Melco), VP3 (Husqvarna), HUS (Husqvarna), 
+                                    and XXX (Singer). The analyzer extracts detailed pattern information 
                                     including thread specifications and stitch data.
                                 </p>
                             </div>
@@ -117,7 +118,7 @@
             if (fileName) {
                 formText.innerHTML = `<i class="fas fa-file me-1 text-success"></i>Selected: ${fileName}`;
             } else {
-                formText.innerHTML = `<i class="fas fa-info-circle me-1"></i>Only .pxf (Pulse Embroidery Format) files are supported. Maximum file size: 16MB.`;
+                formText.innerHTML = `<i class="fas fa-info-circle me-1"></i>Supported formats: .pxf, .dst, .pes, .jef, .exp, .vp3, .hus, .xxx. Maximum file size: 16MB.`;
             }
         });
     </script>

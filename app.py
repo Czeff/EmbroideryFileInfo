@@ -14,7 +14,7 @@ app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key-change-in-prod
 
 # Configuration
 UPLOAD_FOLDER = tempfile.gettempdir()
-ALLOWED_EXTENSIONS = {'pxf'}
+ALLOWED_EXTENSIONS = {'pxf', 'dst', 'pes', 'jef', 'exp', 'vp3', 'hus', 'xxx'}  # Support more embroidery formats
 MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -28,16 +28,31 @@ def allowed_file(filename):
 def analyze_embroidery_file(file_path):
     """Analyze embroidery file using pyembroidery and extract information"""
     try:
-        # Read the embroidery file
+        # Log file information for debugging
+        logging.info(f"Analyzing file: {file_path}")
+        logging.info(f"File size: {os.path.getsize(file_path)} bytes")
+        
+        # Check if file exists and is not empty
+        if not os.path.exists(file_path):
+            return None, "File does not exist"
+        
+        if os.path.getsize(file_path) == 0:
+            return None, "File is empty"
+        
+        # Try to read the embroidery file
         pattern = pyembroidery.read(file_path)
         
         if pattern is None:
-            return None, "Failed to read embroidery file"
+            # Try to get more information about why it failed
+            with open(file_path, 'rb') as f:
+                header = f.read(16)
+                logging.info(f"File header (first 16 bytes): {header}")
+            return None, "pyembroidery could not read this .pxf file format. The file may be corrupted or use an unsupported .pxf variant."
         
         # Extract basic information
         analysis = {
             'filename': os.path.basename(file_path),
-            'stitch_count': pattern.count_stitch_commands(),
+            'stitch_count': len(pattern.stitches),
             'thread_count': len(pattern.threadlist),
             'colors': [],
             'stitch_types': [],
@@ -127,7 +142,7 @@ def upload_file():
         return redirect(url_for('index'))
     
     if not allowed_file(file.filename):
-        flash('Invalid file type. Please upload a .pxf file.', 'error')
+        flash('Invalid file type. Please upload a supported embroidery file (.pxf, .dst, .pes, .jef, .exp, .vp3, .hus, .xxx).', 'error')
         return redirect(url_for('index'))
     
     try:
