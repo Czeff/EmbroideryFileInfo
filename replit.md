@@ -7,6 +7,7 @@ This is a Flask-based web application that allows users to upload and analyze .p
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+Preferred language: Polish (user communicates in Polish)
 
 ## System Architecture
 

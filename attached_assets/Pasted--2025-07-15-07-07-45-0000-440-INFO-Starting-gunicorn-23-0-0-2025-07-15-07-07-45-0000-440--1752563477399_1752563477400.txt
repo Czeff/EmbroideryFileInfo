@@ -1,0 +1,33 @@
+[2025-07-15 07:07:45 +0000] [440] [INFO] Starting gunicorn 23.0.0
+[2025-07-15 07:07:45 +0000] [440] [INFO] Listening at: http://0.0.0.0:5000 (440)
+[2025-07-15 07:07:45 +0000] [440] [INFO] Using worker: sync
+[2025-07-15 07:07:45 +0000] [451] [INFO] Booting worker with pid: 451
+[2025-07-15 07:11:04 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:05 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:05 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:05 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:05 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:05 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:05 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:05 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:05 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:05 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:05 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:05 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:05 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:05 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:05 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:06 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:06 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:06 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:06 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:06 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:06 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:06 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:06 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:06 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:06 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:06 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:06 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:06 +0000] [440] [INFO] Handling signal: winch
+[2025-07-15 07:11:06 +0000] [440] [INFO] Handling signal: winch
