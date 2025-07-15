@@ -44,10 +44,18 @@ def analyze_embroidery_file(file_path):
         
         if pattern is None:
             # Try to get more information about why it failed
+            file_ext = os.path.splitext(file_path)[1].lower()
             with open(file_path, 'rb') as f:
-                header = f.read(16)
-                logging.info(f"File header (first 16 bytes): {header}")
-            return None, "pyembroidery could not read this .pxf file format. The file may be corrupted or use an unsupported .pxf variant."
+                header = f.read(32)
+                logging.info(f"File header (first 32 bytes): {header}")
+            
+            if file_ext == '.pxf':
+                if header.startswith(b'PMLPXF'):
+                    return None, "Ten plik .pxf używa wariantu formatu Pulse, który nie jest w pełni obsługiwany przez pyembroidery. Spróbuj przekonwertować plik do formatu .dst, .pes lub .jef."
+                else:
+                    return None, "Plik .pxf ma nieoczekiwaną strukturę. Może być uszkodzony lub używać niestandardowego formatu."
+            else:
+                return None, f"Nie można odczytać pliku {file_ext}. Plik może być uszkodzony lub używać nieobsługiwanego wariantu formatu."
         
         # Extract basic information
         analysis = {
@@ -80,14 +88,16 @@ def analyze_embroidery_file(file_path):
                     stitch_types.add('Normal Stitch')
                 elif command == pyembroidery.JUMP:
                     stitch_types.add('Jump')
-                elif command == pyembroidery.MOVE:
-                    stitch_types.add('Move')
                 elif command == pyembroidery.COLOR_CHANGE:
                     stitch_types.add('Color Change')
                 elif command == pyembroidery.TRIM:
                     stitch_types.add('Trim')
                 elif command == pyembroidery.END:
                     stitch_types.add('End')
+                elif command == pyembroidery.COLOR_BREAK:
+                    stitch_types.add('Color Break')
+                elif command == pyembroidery.STITCH_BREAK:
+                    stitch_types.add('Stitch Break')
                 else:
                     stitch_types.add(f'Command {command}')
         

@@ -2,7 +2,9 @@
 
 ## Overview
 
-This is a Flask-based web application that allows users to upload and analyze .pxf embroidery files. The application extracts detailed information about embroidery patterns including stitch counts, thread colors, pattern dimensions, and other metadata using the pyembroidery library.
+This is a Flask-based web application that allows users to upload and analyze embroidery files in multiple formats (.pxf, .dst, .pes, .jef, .exp, .vp3, .hus, .xxx). The application extracts detailed information about embroidery patterns including stitch counts, thread colors, pattern dimensions, and other metadata using the pyembroidery library. 
+
+Note: Some .pxf variants (like PMLPXF format) may not be fully supported by pyembroidery and users are advised to convert such files to more compatible formats like .dst, .pes, or .jef.
 
 ## User Preferences
 
