@@ -21,7 +21,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1,
 UPLOAD_FOLDER = tempfile.gettempdir()
 ALLOWED_EXTENSIONS = {'pxf', 'dst', 'pes', 'jef', 'exp', 'vp3', 'hus',
                       'xxx'}  # Support more embroidery formats
-MAX_CONTENT_LENGTH = 64 * 1024 * 1024  # 64MB max file size dla bardzo dużych plików
+MAX_CONTENT_LENGTH = 128 * 1024 * 1024  # 128MB max file size dla bardzo dużych plików przemysłowych
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
@@ -44,9 +44,9 @@ def try_pxf_analysis(file_path):
         with open(file_path, 'rb') as f:
             data = f.read()
 
-        # Ustaw timeout na 300 sekund dla bardzo dużych plików
+        # Ustaw timeout na 600 sekund dla bardzo złożonych plików
         signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(300)  # 5 minut timeout
+        signal.alarm(600)  # 10 minut timeout dla maksymalnej dokładności
 
         try:
             # Użyj zaawansowanego analizatora PXF

@@ -53,6 +53,15 @@ This is a Flask-based web application that allows users to upload and analyze em
       - Enhanced pattern detection sensitivity (3-point minimum instead of 5/10)
       - Extended stitch analysis from 500 to 1,500 coordinate points
       - Additional parameter categories for thorough embroidery analysis
+    - **Maximum Resource Allocation Update (July 16, 2025):** Ultra-precision enhancements:
+      - Extended timeout to 600 seconds (10 minutes) for maximum analysis depth
+      - Increased file size limit to 128MB for industrial embroidery files
+      - Expanded coordinate analysis to 30,000 points for ultra-detailed patterns
+      - Enhanced stitch analysis to 3,000 coordinate points
+      - Ultra-sensitive pattern detection (2-point minimum for maximum sensitivity)
+      - Extended parameter chunk analysis from 32 to 64 bytes
+      - Added advanced parameters: thread weight, needle size, fabric type, hoop size, stabilizer type
+      - Improved clustering algorithms with 5cm distance threshold and 5-point analysis window
 
 Note: Some .pxf variants (like PMLPXF format) may not be fully supported by pyembroidery and users are advised to convert such files to more compatible formats like .dst, .pes, or .jef.
 

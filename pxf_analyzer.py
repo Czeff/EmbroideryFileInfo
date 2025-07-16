@@ -245,7 +245,7 @@ class PXFAnalyzer:
         params = {}
         
         try:
-            # Przechowuje wszystkie znalezione parametry z większą szczegółowością
+            # Przechowuje wszystkie znalezione parametry z maksymalną szczegółowością
             all_parameters = {
                 'density_values': [],
                 'underlay_types': [],
@@ -256,12 +256,21 @@ class PXFAnalyzer:
                 'stitch_lengths': [],
                 'machine_speeds': [],
                 'pull_compensations': [],
-                'auto_underlay_settings': []
+                'auto_underlay_settings': [],
+                'pattern_densities': [],
+                'thread_weights': [],
+                'needle_sizes': [],
+                'fabric_types': [],
+                'hoop_sizes': [],
+                'stabilizer_types': [],
+                'embroidery_speeds': [],
+                'trim_commands': [],
+                'color_change_counts': []
             }
             
-            # Szukamy sekcji parametrów z większą dokładnością
-            for i in range(0, len(self.data) - 32, 1):  # Analizujemy każdy bajt
-                chunk = self.data[i:i+32]
+            # Szukamy sekcji parametrów z maksymalną dokładnością (każdy bajt + większe okno)
+            for i in range(0, len(self.data) - 64, 1):  # Analizujemy każdy bajt z większym oknem
+                chunk = self.data[i:i+64]  # Większy chunk dla lepszego wykrywania
                 
                 # Parametry gęstości
                 if b'DENSITY' in chunk:
@@ -363,6 +372,55 @@ class PXFAnalyzer:
                             all_parameters['auto_underlay_settings'].append(setting_name)
                     except struct.error:
                         pass
+                
+                # Dodatkowe zaawansowane parametry
+                if b'THREAD_WEIGHT' in chunk or b'WEIGHT' in chunk:
+                    try:
+                        weight = struct.unpack('<I', self.data[i+8:i+12])[0]
+                        if 30 <= weight <= 120:  # Typowe wagi nici
+                            all_parameters['thread_weights'].append(weight)
+                    except struct.error:
+                        pass
+                
+                if b'NEEDLE_SIZE' in chunk or b'NEEDLE' in chunk:
+                    try:
+                        needle = struct.unpack('<I', self.data[i+8:i+12])[0]
+                        if 60 <= needle <= 120:  # Typowe rozmiary igieł
+                            all_parameters['needle_sizes'].append(needle)
+                    except struct.error:
+                        pass
+                
+                if b'FABRIC_TYPE' in chunk or b'FABRIC' in chunk:
+                    try:
+                        fabric_code = struct.unpack('<I', self.data[i+8:i+12])[0]
+                        fabric_types = {
+                            1: 'Cotton', 2: 'Polyester', 3: 'Silk', 4: 'Denim',
+                            5: 'Leather', 6: 'Canvas', 7: 'Fleece', 8: 'Terry'
+                        }
+                        if fabric_code in fabric_types:
+                            all_parameters['fabric_types'].append(fabric_types[fabric_code])
+                    except struct.error:
+                        pass
+                
+                if b'HOOP_SIZE' in chunk or b'HOOP' in chunk:
+                    try:
+                        hoop = struct.unpack('<f', self.data[i+8:i+12])[0]
+                        if 50 <= hoop <= 400:  # mm
+                            all_parameters['hoop_sizes'].append(hoop / 10.0)  # Konwersja na cm
+                    except struct.error:
+                        pass
+                
+                if b'STABILIZER' in chunk:
+                    try:
+                        stab_type = struct.unpack('<I', self.data[i+8:i+12])[0]
+                        stabilizers = {
+                            0: 'None', 1: 'Tear-away', 2: 'Cut-away', 
+                            3: 'Wash-away', 4: 'Heat-away', 5: 'Sticky'
+                        }
+                        if stab_type in stabilizers:
+                            all_parameters['stabilizer_types'].append(stabilizers[stab_type])
+                    except struct.error:
+                        pass
             
             # Przetwarza zebrane parametry
             if all_parameters['density_values']:
@@ -420,6 +478,34 @@ class PXFAnalyzer:
             
             if all_parameters['auto_underlay_settings']:
                 params['auto_underlay'] = ', '.join(set(all_parameters['auto_underlay_settings']))
+            
+            # Dodatkowe zaawansowane parametry
+            if all_parameters['thread_weights']:
+                weights = all_parameters['thread_weights']
+                if len(weights) == 1:
+                    params['thread_weight'] = f"Wt {weights[0]}"
+                else:
+                    params['thread_weight'] = f"Wt {min(weights)} - {max(weights)}"
+            
+            if all_parameters['needle_sizes']:
+                needles = all_parameters['needle_sizes']
+                if len(needles) == 1:
+                    params['needle_size'] = f"#{needles[0]}"
+                else:
+                    params['needle_size'] = f"#{min(needles)} - #{max(needles)}"
+            
+            if all_parameters['fabric_types']:
+                params['fabric_type'] = ', '.join(set(all_parameters['fabric_types']))
+            
+            if all_parameters['hoop_sizes']:
+                hoops = all_parameters['hoop_sizes']
+                if len(hoops) == 1:
+                    params['hoop_size'] = f"{hoops[0]:.1f} cm"
+                else:
+                    params['hoop_size'] = f"{min(hoops):.1f} - {max(hoops):.1f} cm"
+            
+            if all_parameters['stabilizer_types']:
+                params['stabilizer_type'] = ', '.join(set(all_parameters['stabilizer_types']))
             
             # Dodaj informację o liczbie znalezionych parametrów
             total_params = sum(len(v) for v in all_parameters.values() if isinstance(v, list))
@@ -502,7 +588,7 @@ class PXFAnalyzer:
                 if -32000 < x < 32000 and -32000 < y < 32000:
                     coordinates.append((x, y, cmd))
                     
-                    if len(coordinates) >= 15000:  # Znacznie większy limit dla bardzo szczegółowej analizy
+                    if len(coordinates) >= 30000:  # Maksymalny limit dla ultra-szczegółowej analizy
                         break
                         
             except struct.error:
@@ -580,8 +666,8 @@ class PXFAnalyzer:
         if current_pattern:
             patterns.append(current_pattern)
         
-        # Filtruj wzory które mają mniej niż 3 punktów (bardziej agresywne wykrywanie)
-        patterns = [p for p in patterns if len(p) >= 3]
+        # Filtruj wzory które mają mniej niż 2 punktów (ultra-agresywne wykrywanie)
+        patterns = [p for p in patterns if len(p) >= 2]
         
         # Jeśli wykryto wzory przez znaczniki końca, użyj ich
         if len(patterns) > 1:
@@ -629,14 +715,14 @@ class PXFAnalyzer:
             
             # Sprawdź średnią odległość od punktów w aktualnym wzorze
             distances = []
-            for px, py, _ in current_pattern[-10:]:  # Ostatnie 10 punktów
+            for px, py, _ in current_pattern[-5:]:  # Ostatnie 5 punktów dla większej czułości
                 dist = ((x - px)**2 + (y - py)**2)**0.5
                 distances.append(dist)
             
             avg_distance = sum(distances) / len(distances) if distances else 0
             
-            # Jeśli punkt jest bardzo daleko od reszty wzoru, zacznij nowy wzór
-            if avg_distance > 1000 and len(current_pattern) > 20:  # 10cm średnia odległość
+            # Jeśli punkt jest bardzo daleko od reszty wzoru, zacznij nowy wzór (ultra-czułe wykrywanie)
+            if avg_distance > 500 and len(current_pattern) > 10:  # 5cm średnia odległość, mniej punktów
                 patterns.append(current_pattern)
                 current_pattern = [(x, y, cmd)]
             else:
@@ -646,8 +732,8 @@ class PXFAnalyzer:
         if current_pattern:
             patterns.append(current_pattern)
         
-        # Filtruj wzory które mają mniej niż 5 punktów (mniej restrykcyjne)
-        patterns = [p for p in patterns if len(p) >= 5]
+        # Filtruj wzory które mają mniej niż 2 punktów (ultra-agresywne wykrywanie)
+        patterns = [p for p in patterns if len(p) >= 2]
         
         return patterns if len(patterns) > 1 else [coordinates]
     
@@ -672,9 +758,9 @@ class PXFAnalyzer:
             }
         }
         
-        # Średnia długość ściegu (analizuj więcej punktów)
+        # Średnia długość ściegu (analizuj maksymalną ilość punktów)
         distances = []
-        for i in range(1, min(len(coordinates), 1500)):
+        for i in range(1, min(len(coordinates), 3000)):
             x1, y1, _ = coordinates[i-1]
             x2, y2, _ = coordinates[i]
             dist = ((x2-x1)**2 + (y2-y1)**2)**0.5
