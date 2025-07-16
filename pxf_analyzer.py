@@ -268,20 +268,35 @@ class PXFAnalyzer:
                 'color_change_counts': []
             }
             
-            # Szukamy sekcji parametrów z maksymalną dokładnością (każdy bajt + większe okno)
-            for i in range(0, len(self.data) - 64, 1):  # Analizujemy każdy bajt z większym oknem
-                chunk = self.data[i:i+64]  # Większy chunk dla lepszego wykrywania
+            # Szukamy sekcji parametrów z maksymalną dokładnością i większą różnorodnością wzorców
+            for i in range(0, len(self.data) - 128, 1):  # Analizujemy każdy bajt z dużym oknem
+                chunk = self.data[i:i+128]  # Duży chunk dla najlepszego wykrywania
+                text_chunk = chunk.decode('utf-8', errors='ignore').lower()  # Dodatkowa analiza tekstowa
                 
-                # Parametry gęstości
-                if b'DENSITY' in chunk:
-                    try:
-                        density = struct.unpack('<f', self.data[i+8:i+12])[0]
-                        if 0.1 <= density <= 20:
-                            # Konwertuj na cm
-                            density_cm = density / 10.0
-                            all_parameters['density_values'].append(density_cm)
-                    except struct.error:
-                        pass
+                # Parametry gęstości (więcej wariantów)
+                density_patterns = [b'DENSITY', b'DENS', b'ROW_SPACING', b'SPACING', b'PITCH']
+                if any(pattern in chunk for pattern in density_patterns):
+                    for offset in range(0, 32, 4):  # Sprawdź różne pozycje
+                        try:
+                            density = struct.unpack('<f', self.data[i+offset:i+offset+4])[0]
+                            if 0.05 <= density <= 50:  # Szerszy zakres
+                                density_cm = density / 10.0 if density > 5 else density
+                                all_parameters['density_values'].append(density_cm)
+                                break
+                        except struct.error:
+                            continue
+                
+                # Wykrywanie tekstowe parametrów gęstości
+                if any(term in text_chunk for term in ['density', 'spacing', 'pitch']):
+                    import re
+                    density_match = re.search(r'(?:density|spacing|pitch)[:\s=]*(\d+\.?\d*)', text_chunk)
+                    if density_match:
+                        try:
+                            density_val = float(density_match.group(1))
+                            if 0.1 <= density_val <= 10:
+                                all_parameters['density_values'].append(density_val)
+                        except ValueError:
+                            pass
                 
                 # Parametry podkładu
                 if b'UNDERLAY' in chunk:
@@ -373,14 +388,55 @@ class PXFAnalyzer:
                     except struct.error:
                         pass
                 
-                # Dodatkowe zaawansowane parametry
-                if b'THREAD_WEIGHT' in chunk or b'WEIGHT' in chunk:
-                    try:
-                        weight = struct.unpack('<I', self.data[i+8:i+12])[0]
-                        if 30 <= weight <= 120:  # Typowe wagi nici
-                            all_parameters['thread_weights'].append(weight)
-                    except struct.error:
-                        pass
+                # Rozszerzone wykrywanie parametrów haftu
+                # Waga nici
+                weight_patterns = [b'THREAD_WEIGHT', b'WEIGHT', b'WT', b'THREAD_WT']
+                if any(pattern in chunk for pattern in weight_patterns):
+                    for offset in range(0, 64, 4):
+                        try:
+                            weight = struct.unpack('<I', self.data[i+offset:i+offset+4])[0]
+                            if 20 <= weight <= 150:
+                                all_parameters['thread_weights'].append(weight)
+                                break
+                        except struct.error:
+                            continue
+                
+                # Długość ściegów (dodatkowe wzorce)
+                stitch_patterns = [b'STITCH_LENGTH', b'LENGTH', b'STEP', b'STITCH_LEN']
+                if any(pattern in chunk for pattern in stitch_patterns):
+                    for offset in range(0, 64, 4):
+                        try:
+                            length = struct.unpack('<f', self.data[i+offset:i+offset+4])[0]
+                            if 0.05 <= length <= 15:
+                                all_parameters['stitch_lengths'].append(length / 10.0)
+                                break
+                        except struct.error:
+                            continue
+                
+                # Wykrywanie wzorców tekstowych dla różnych parametrów
+                if any(term in text_chunk for term in ['thread', 'weight', 'wt']):
+                    import re
+                    weight_match = re.search(r'(?:weight|wt)[:\s=]*(\d+)', text_chunk)
+                    if weight_match:
+                        try:
+                            weight_val = int(weight_match.group(1))
+                            if 20 <= weight_val <= 150:
+                                all_parameters['thread_weights'].append(weight_val)
+                        except ValueError:
+                            pass
+                
+                # Prędkość haftu
+                speed_patterns = [b'SPEED', b'RPM', b'SPM', b'VELOCITY', b'RATE']
+                if any(pattern in chunk for pattern in speed_patterns):
+                    for offset in range(0, 64, 4):
+                        try:
+                            speed = struct.unpack('<I', self.data[i+offset:i+offset+4])[0]
+                            if 50 <= speed <= 3000:
+                                all_parameters['machine_speeds'].append(speed)
+                                all_parameters['embroidery_speeds'].append(speed)
+                                break
+                        except struct.error:
+                            continue
                 
                 if b'NEEDLE_SIZE' in chunk or b'NEEDLE' in chunk:
                     try:
@@ -506,6 +562,21 @@ class PXFAnalyzer:
             
             if all_parameters['stabilizer_types']:
                 params['stabilizer_type'] = ', '.join(set(all_parameters['stabilizer_types']))
+            
+            if all_parameters['embroidery_speeds']:
+                speeds = all_parameters['embroidery_speeds']
+                if len(speeds) == 1:
+                    params['embroidery_speed'] = f"{speeds[0]} spm"
+                else:
+                    params['embroidery_speed'] = f"{min(speeds)} - {max(speeds)} spm"
+            
+            # Dodatkowe analizy strukturalne
+            params.update(self._extract_additional_metadata())
+            
+            # Analiza czasowa i wydajności
+            time_analysis = self._analyze_embroidery_time()
+            if time_analysis:
+                params.update(time_analysis)
             
             # Dodaj informację o liczbie znalezionych parametrów
             total_params = sum(len(v) for v in all_parameters.values() if isinstance(v, list))
@@ -781,6 +852,163 @@ class PXFAnalyzer:
         area = max(width * height, 1)  # Unikaj dzielenia przez zero
         
         return len(coords_window) / area * 10000  # Normalizacja
+    
+    def _extract_additional_metadata(self) -> Dict[str, Any]:
+        """Wyciąga dodatkowe metadane z pliku PXF"""
+        metadata = {}
+        
+        try:
+            # Szukaj informacji o oprogramowaniu
+            text_content = self.data.decode('utf-8', errors='ignore')
+            
+            # Wzorce oprogramowania
+            software_patterns = {
+                'inkstitch': r'(?i)inkstitch',
+                'embird': r'(?i)embird',
+                'wilcom': r'(?i)wilcom',
+                'tajima': r'(?i)tajima',
+                'brother': r'(?i)brother',
+                'pfaff': r'(?i)pfaff',
+                'husqvarna': r'(?i)husqvarna',
+                'janome': r'(?i)janome'
+            }
+            
+            import re
+            for software, pattern in software_patterns.items():
+                if re.search(pattern, text_content):
+                    metadata['detected_software'] = software.title()
+                    break
+            
+            # Szukaj dat utworzenia
+            date_pattern = r'(\d{4}[-/]\d{1,2}[-/]\d{1,2})'
+            date_match = re.search(date_pattern, text_content)
+            if date_match:
+                metadata['creation_date'] = date_match.group(1)
+            
+            # Szukaj nazw projektów
+            name_patterns = [
+                r'(?i)name[:\s=]+([^\n\r]{1,50})',
+                r'(?i)title[:\s=]+([^\n\r]{1,50})',
+                r'(?i)design[:\s=]+([^\n\r]{1,50})'
+            ]
+            
+            for pattern in name_patterns:
+                match = re.search(pattern, text_content)
+                if match:
+                    name = match.group(1).strip()
+                    if len(name) > 3 and not name.isdigit():
+                        metadata['design_name'] = name
+                        break
+            
+            # Analiza struktury pliku
+            file_structure = self._analyze_file_structure()
+            if file_structure:
+                metadata.update(file_structure)
+                
+        except Exception:
+            pass  # Kontynuuj nawet przy błędach
+        
+        return metadata
+    
+    def _analyze_file_structure(self) -> Dict[str, Any]:
+        """Analizuje strukturę pliku PXF"""
+        structure = {}
+        
+        try:
+            # Sprawdź nagłówek pliku
+            header = self.data[:100]
+            
+            # Różne typy nagłówków PXF
+            if b'PMLPXF' in header:
+                structure['file_format'] = 'PMLPXF (Professional)'
+                structure['format_version'] = 'Professional'
+            elif b'PXF' in header:
+                structure['file_format'] = 'Standard PXF'
+                structure['format_version'] = 'Standard'
+            
+            # Sprawdź sekcje pliku
+            sections = []
+            section_markers = [
+                (b'HEADER', 'Header Section'),
+                (b'COLOR', 'Color Information'),
+                (b'STITCH', 'Stitch Data'),
+                (b'PARAM', 'Parameters'),
+                (b'META', 'Metadata'),
+                (b'THREAD', 'Thread Information')
+            ]
+            
+            for marker, description in section_markers:
+                if marker in self.data:
+                    sections.append(description)
+            
+            if sections:
+                structure['detected_sections'] = sections
+            
+            # Oszacuj złożoność pliku
+            complexity_score = 0
+            complexity_score += len(sections) * 10
+            complexity_score += len(self.data) // 1000
+            
+            if complexity_score < 50:
+                structure['complexity'] = 'Prosty'
+            elif complexity_score < 200:
+                structure['complexity'] = 'Średni'
+            else:
+                structure['complexity'] = 'Złożony'
+                
+        except Exception:
+            pass
+        
+        return structure
+    
+    def _analyze_embroidery_time(self) -> Dict[str, Any]:
+        """Analizuje szacowany czas haftu"""
+        time_analysis = {}
+        
+        try:
+            # Szacuj czas na podstawie liczby ściegów i parametrów
+            if hasattr(self, 'coordinate_count') and self.coordinate_count:
+                stitch_count = self.coordinate_count
+            else:
+                # Spróbuj policzyć ściegi
+                coordinates = []
+                for i in range(0, min(len(self.data) - 6, 30000), 6):
+                    try:
+                        x = struct.unpack('<h', self.data[i:i+2])[0]
+                        y = struct.unpack('<h', self.data[i+2:i+4])[0]
+                        if -32000 < x < 32000 and -32000 < y < 32000:
+                            coordinates.append((x, y))
+                    except:
+                        continue
+                stitch_count = len(coordinates)
+            
+            if stitch_count > 0:
+                # Szacunki czasowe (na podstawie standardowych prędkości haftu)
+                slow_speed = 400   # ściegi/min
+                medium_speed = 800 # ściegi/min  
+                fast_speed = 1200  # ściegi/min
+                
+                slow_time = stitch_count / slow_speed
+                medium_time = stitch_count / medium_speed
+                fast_time = stitch_count / fast_speed
+                
+                def format_time(minutes):
+                    if minutes < 60:
+                        return f"{minutes:.1f} min"
+                    else:
+                        hours = minutes // 60
+                        mins = minutes % 60
+                        return f"{int(hours)}h {mins:.0f}min"
+                
+                time_analysis['estimated_time_slow'] = format_time(slow_time)
+                time_analysis['estimated_time_medium'] = format_time(medium_time)
+                time_analysis['estimated_time_fast'] = format_time(fast_time)
+                time_analysis['recommended_time'] = format_time(medium_time)
+                
+        except Exception:
+            pass
+        
+        return time_analysis
     
     def _detect_multiple_patterns(self, coordinates: List[Tuple[int, int, int]]) -> List[List[Tuple[int, int, int]]]:
         """Wykrywa wiele wzorów na podstawie długich przeskoków i znaczników końca"""
