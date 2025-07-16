@@ -268,35 +268,108 @@ class PXFAnalyzer:
                 'color_change_counts': []
             }
             
-            # Szukamy sekcji parametrów z maksymalną dokładnością i większą różnorodnością wzorców
-            for i in range(0, len(self.data) - 128, 1):  # Analizujemy każdy bajt z dużym oknem
-                chunk = self.data[i:i+128]  # Duży chunk dla najlepszego wykrywania
-                text_chunk = chunk.decode('utf-8', errors='ignore').lower()  # Dodatkowa analiza tekstowa
+            # Ultra-dokładna analiza z maksymalnym oknem i szczegółowym wykrywaniem
+            for i in range(0, len(self.data) - 256, 1):  # Analizujemy każdy bajt z ogromnym oknem
+                chunk = self.data[i:i+256]  # Ogromny chunk dla ultra-dokładnego wykrywania
+                text_chunk = chunk.decode('utf-8', errors='ignore').lower()  # Analiza tekstowa
                 
-                # Parametry gęstości (więcej wariantów)
-                density_patterns = [b'DENSITY', b'DENS', b'ROW_SPACING', b'SPACING', b'PITCH']
+                # Dodatkowa analiza z różnymi kodowaniami
+                try:
+                    latin_chunk = chunk.decode('latin-1', errors='ignore').lower()
+                    ascii_chunk = chunk.decode('ascii', errors='ignore').lower()
+                except:
+                    latin_chunk = text_chunk
+                    ascii_chunk = text_chunk
+                
+                # Rozszerzone parametry gęstości z wieloma formatami
+                density_patterns = [b'DENSITY', b'DENS', b'ROW_SPACING', b'SPACING', b'PITCH', 
+                                  b'LINE_SPACING', b'FILL_DENSITY', b'STITCHDENSITY']
                 if any(pattern in chunk for pattern in density_patterns):
-                    for offset in range(0, 32, 4):  # Sprawdź różne pozycje
+                    # Sprawdź różne formaty danych (float, int, scaled)
+                    for offset in range(0, 64, 2):
                         try:
-                            density = struct.unpack('<f', self.data[i+offset:i+offset+4])[0]
-                            if 0.05 <= density <= 50:  # Szerszy zakres
-                                density_cm = density / 10.0 if density > 5 else density
-                                all_parameters['density_values'].append(density_cm)
-                                break
+                            # Format 1: Float (najpopularniejszy)
+                            if offset + 4 <= len(chunk):
+                                density_f = struct.unpack('<f', chunk[offset:offset+4])[0]
+                                if 0.01 <= density_f <= 100:
+                                    density_cm = density_f / 10.0 if density_f > 10 else density_f
+                                    all_parameters['density_values'].append(density_cm)
+                                    break
+                            
+                            # Format 2: Integer (mikrometry)
+                            if offset + 4 <= len(chunk):
+                                density_i = struct.unpack('<I', chunk[offset:offset+4])[0]
+                                if 50 <= density_i <= 10000:  # mikrometry
+                                    density_cm = density_i / 1000.0  # konwersja na cm
+                                    all_parameters['density_values'].append(density_cm)
+                                    break
+                                    
+                            # Format 3: Short (dziesiąte mm)
+                            if offset + 2 <= len(chunk):
+                                density_s = struct.unpack('<H', chunk[offset:offset+2])[0]
+                                if 1 <= density_s <= 500:
+                                    density_cm = density_s / 100.0  # konwersja na cm
+                                    all_parameters['density_values'].append(density_cm)
+                                    break
                         except struct.error:
                             continue
                 
-                # Wykrywanie tekstowe parametrów gęstości
-                if any(term in text_chunk for term in ['density', 'spacing', 'pitch']):
-                    import re
-                    density_match = re.search(r'(?:density|spacing|pitch)[:\s=]*(\d+\.?\d*)', text_chunk)
-                    if density_match:
-                        try:
-                            density_val = float(density_match.group(1))
-                            if 0.1 <= density_val <= 10:
-                                all_parameters['density_values'].append(density_val)
-                        except ValueError:
-                            pass
+                # Zaawansowane wykrywanie tekstowe parametrów haftu
+                import re
+                
+                # Wzorce dla różnych parametrów haftu  
+                text_patterns = {
+                    'density': [r'(?:density|gęstość)[:\s=]*(\d+\.?\d*)', 
+                               r'row[_\s]*spacing[:\s=]*(\d+\.?\d*)',
+                               r'pitch[:\s=]*(\d+\.?\d*)'],
+                    'underlay': [r'(?:underlay|podkład)[:\s=]*(\w+)',
+                                r'auto[_\s]*underlay[:\s=]*(\w+)'],
+                    'angle': [r'(?:angle|kąt|direction)[:\s=]*(\d+\.?\d*)',
+                             r'fill[_\s]*angle[:\s=]*(\d+\.?\d*)'],
+                    'stitch_length': [r'(?:stitch[_\s]*length|długość[_\s]*ściegu)[:\s=]*(\d+\.?\d*)',
+                                     r'max[_\s]*stitch[:\s=]*(\d+\.?\d*)'],
+                    'machine_speed': [r'(?:speed|prędkość|velocity)[:\s=]*(\d+)',
+                                     r'machine[_\s]*speed[:\s=]*(\d+)',
+                                     r'rpm[:\s=]*(\d+)'],
+                    'thread_weight': [r'(?:thread[_\s]*weight|waga[_\s]*nici)[:\s=]*(\d+)',
+                                     r'weight[:\s=]*(\d+)wt',
+                                     r'wt[:\s=]*(\d+)']
+                }
+                
+                # Sprawdź wszystkie wzorce tekstowe w różnych kodowaniach
+                for param_type, patterns in text_patterns.items():
+                    for pattern in patterns:
+                        for text_content in [text_chunk, latin_chunk, ascii_chunk]:
+                            match = re.search(pattern, text_content)
+                            if match:
+                                try:
+                                    value = float(match.group(1))
+                                    # Walidacja i konwersja wartości
+                                    if param_type == 'density' and 0.05 <= value <= 20:
+                                        all_parameters['density_values'].append(value)
+                                    elif param_type == 'angle' and 0 <= value <= 360:
+                                        all_parameters['fill_angles'].append(value)
+                                    elif param_type == 'stitch_length' and 0.1 <= value <= 15:
+                                        all_parameters['stitch_lengths'].append(value / 10.0)
+                                    elif param_type == 'machine_speed' and 50 <= value <= 3000:
+                                        all_parameters['machine_speeds'].append(int(value))
+                                    elif param_type == 'thread_weight' and 20 <= value <= 150:
+                                        all_parameters['thread_weights'].append(int(value))
+                                    break
+                                except (ValueError, IndexError):
+                                    continue
+                        
+                        # Wykrywanie parametrów tekstowych (underlay)
+                        if param_type == 'underlay':
+                            for text_content in [text_chunk, latin_chunk, ascii_chunk]:
+                                match = re.search(patterns[0], text_content)
+                                if match:
+                                    underlay_value = match.group(1).strip().lower()
+                                    if underlay_value in ['yes', 'true', 'on', 'enabled', 'tak', '1']:
+                                        all_parameters['auto_underlay_settings'].append('Enabled')
+                                    elif underlay_value in ['no', 'false', 'off', 'disabled', 'nie', '0']:
+                                        all_parameters['auto_underlay_settings'].append('Disabled')
+                                    break
                 
                 # Parametry podkładu
                 if b'UNDERLAY' in chunk:
@@ -520,10 +593,11 @@ class PXFAnalyzer:
             # Dodatkowe parametry
             if all_parameters['stitch_lengths']:
                 lengths = all_parameters['stitch_lengths']
+                avg_length = sum(lengths) / len(lengths)
                 if len(lengths) == 1:
-                    params['stitch_length'] = f"{lengths[0]:.2f} cm"
+                    params['stitch_length'] = f"{lengths[0]:.2f} cm - {self._assess_stitch_length_quality(lengths[0])}"
                 else:
-                    params['stitch_length'] = f"{min(lengths):.2f} - {max(lengths):.2f} cm"
+                    params['stitch_length'] = f"{min(lengths):.2f} - {max(lengths):.2f} cm (średnia: {avg_length:.2f} cm)"
             
             if all_parameters['machine_speeds']:
                 speeds = all_parameters['machine_speeds']
@@ -535,13 +609,14 @@ class PXFAnalyzer:
             if all_parameters['auto_underlay_settings']:
                 params['auto_underlay'] = ', '.join(set(all_parameters['auto_underlay_settings']))
             
-            # Dodatkowe zaawansowane parametry
+            # Dodatkowe zaawansowane parametry z opisami
             if all_parameters['thread_weights']:
                 weights = all_parameters['thread_weights']
                 if len(weights) == 1:
-                    params['thread_weight'] = f"Wt {weights[0]}"
+                    params['thread_weight'] = self._get_thread_weight_description(weights[0])
                 else:
-                    params['thread_weight'] = f"Wt {min(weights)} - {max(weights)}"
+                    min_weight, max_weight = min(weights), max(weights)
+                    params['thread_weight'] = f"Wt {min_weight} - {max_weight} (różne grubości nici)"
             
             if all_parameters['needle_sizes']:
                 needles = all_parameters['needle_sizes']
@@ -1009,6 +1084,56 @@ class PXFAnalyzer:
             pass
         
         return time_analysis
+    
+    def _assess_density_quality(self, density: float) -> str:
+        """Ocenia jakość gęstości ściegów"""
+        if density < 0.2:
+            return "Bardzo gęste (wysoka jakość, długi czas haftu)"
+        elif density < 0.4:
+            return "Gęste (dobra jakość, średni czas haftu)"
+        elif density < 0.8:
+            return "Średnie (standardowa jakość)"
+        elif density < 1.5:
+            return "Rzadkie (szybkie haftu, niższa jakość)"
+        else:
+            return "Bardzo rzadkie (może wymagać poprawek)"
+    
+    def _get_density_recommendation(self, density: float) -> str:
+        """Podaje praktyczne wskazówki dla gęstości"""
+        if density < 0.2:
+            return "Idealne dla detali i wysokiej jakości. Sprawdź czy maszyna poradzi sobie z gęstością."
+        elif density < 0.4:
+            return "Dobra gęstość do większości projektów. Uniwersalne ustawienie."
+        elif density < 0.8:
+            return "Standardowe ustawienia. Dobre dla początku."
+        elif density < 1.5:
+            return "Może wymagać zwiększenia gęstości dla lepszego pokrycia."
+        else:
+            return "Zalecane zwiększenie gęstości - możliwe prześwitywanie tkaniny."
+    
+    def _assess_stitch_length_quality(self, length: float) -> str:
+        """Ocenia jakość długości ściegów"""
+        if length < 0.2:
+            return "Bardzo krótkie (wysokie detale, długi czas)"
+        elif length < 0.4:
+            return "Krótkie (dobre detale)"
+        elif length < 0.8:
+            return "Średnie (standardowe)"
+        elif length < 1.2:
+            return "Długie (szybkie, mniej detali)"
+        else:
+            return "Bardzo długie (może być widoczne jako linie)"
+    
+    def _get_thread_weight_description(self, weight: int) -> str:
+        """Opisuje wagę nici"""
+        if weight <= 40:
+            return f"Gruba nić ({weight}wt) - do wypełnień i mocnych elementów"
+        elif weight <= 60:
+            return f"Średnia nić ({weight}wt) - uniwersalna do większości projektów"
+        elif weight <= 80:
+            return f"Cienka nić ({weight}wt) - do detali i precyzyjnych elementów"
+        else:
+            return f"Bardzo cienka nić ({weight}wt) - do najdrobniejszych detali"
     
     def _detect_multiple_patterns(self, coordinates: List[Tuple[int, int, int]]) -> List[List[Tuple[int, int, int]]]:
         """Wykrywa wiele wzorów na podstawie długich przeskoków i znaczników końca"""

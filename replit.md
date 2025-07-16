@@ -70,6 +70,16 @@ This is a Flask-based web application that allows users to upload and analyze em
       - Multi-method approach: spatial grouping, command sequence, and density analysis
       - Minimum pattern size increased to 60-100 stitches for complete patterns
       - Smart pattern selection prioritizing complete patterns over fragments
+    - **Comprehensive Parameter Extraction & User-Friendly Display (July 16, 2025):**
+      - Expanded analysis window to 256 bytes for ultra-detailed parameter detection
+      - Added multi-encoding text analysis (UTF-8, Latin-1, ASCII) for better compatibility
+      - Enhanced density detection with multiple data formats (float, integer, scaled values)
+      - Comprehensive text pattern matching for embroidery parameters in multiple languages
+      - Added quality assessments and practical recommendations for each parameter
+      - Implemented user-friendly parameter descriptions with technical explanations
+      - Created intuitive display format with color-coded sections and helpful tips
+      - Added time estimation and software detection capabilities
+      - Enhanced parameter validation with realistic value ranges for embroidery settings
 
 Note: Some .pxf variants (like PMLPXF format) may not be fully supported by pyembroidery and users are advised to convert such files to more compatible formats like .dst, .pes, or .jef.
 

@@ -206,70 +206,86 @@
         {% if analysis.raw_analysis and analysis.embroidery_parameters %}
         <div class="row mb-4">
             <div class="col">
-                <div class="card">
-                    <div class="card-header">
+                <div class="card border-success">
+                    <div class="card-header bg-success text-white">
                         <h4 class="card-title mb-0">
-                            <i class="fas fa-sliders-h me-2"></i>
-                            Parametry haftu
+                            <i class="fas fa-cogs me-2"></i>
+                            Szczegółowe parametry haftu
                         </h4>
                     </div>
                     <div class="card-body">
                         <div class="row">
+                            <!-- Parametry podstawowe -->
                             <div class="col-md-6">
-                                <div class="table-responsive">
-                                    <table class="table table-sm">
-                                        {% if analysis.embroidery_parameters.stitch_density != 'Unknown' %}
-                                        <tr>
-                                            <td><strong>Gęstość ściegów:</strong></td>
-                                            <td>{{ analysis.embroidery_parameters.stitch_density }}</td>
-                                        </tr>
+                                <h6 class="text-success mb-3"><i class="fas fa-tools me-2"></i>Ustawienia podstawowe</h6>
+                                <div class="mb-3">
+                                    {% for key, value in analysis.embroidery_parameters.items() %}
+                                        {% if key in ['row_spacing', 'density_quality', 'density_recommendation', 'stitch_length', 'fill_angle', 'pull_compensation'] and value and value != 'Unknown' %}
+                                        <div class="border-start border-success ps-3 mb-2">
+                                            <strong>
+                                                {% if key == 'row_spacing' %}Rozstaw rzędów:
+                                                {% elif key == 'stitch_length' %}Długość ściegu:
+                                                {% elif key == 'fill_angle' %}Kąt wypełnienia:
+                                                {% elif key == 'pull_compensation' %}Kompensacja ściągania:
+                                                {% elif key == 'density_quality' %}Jakość gęstości:
+                                                {% elif key == 'density_recommendation' %}Zalecenia:
+                                                {% else %}{{ key|title }}:
+                                                {% endif %}
+                                            </strong><br>
+                                            <span class="text-primary">{{ value }}</span>
+                                            {% if key == 'density_recommendation' %}
+                                                <br><small class="text-muted"><i class="fas fa-lightbulb me-1"></i>Porada</small>
+                                            {% endif %}
+                                        </div>
                                         {% endif %}
-                                        {% if analysis.embroidery_parameters.underlay_type != 'Unknown' %}
-                                        <tr>
-                                            <td><strong>Typ podkładu:</strong></td>
-                                            <td>{{ analysis.embroidery_parameters.underlay_type }}</td>
-                                        </tr>
-                                        {% endif %}
-                                        {% if analysis.embroidery_parameters.automatic_underlay != 'Unknown' %}
-                                        <tr>
-                                            <td><strong>Automatyczny podkład:</strong></td>
-                                            <td>{{ analysis.embroidery_parameters.automatic_underlay }}</td>
-                                        </tr>
-                                        {% endif %}
-                                        {% if analysis.embroidery_parameters.pull_compensation != 'Unknown' %}
-                                        <tr>
-                                            <td><strong>Kompensacja ściągania:</strong></td>
-                                            <td>{{ analysis.embroidery_parameters.pull_compensation }}</td>
-                                        </tr>
-                                        {% endif %}
-                                    </table>
+                                    {% endfor %}
                                 </div>
                             </div>
+                            
+                            <!-- Parametry zaawansowane -->
                             <div class="col-md-6">
-                                <div class="table-responsive">
-                                    <table class="table table-sm">
-                                        {% if analysis.embroidery_parameters.fill_pattern != 'Unknown' %}
-                                        <tr>
-                                            <td><strong>Wzór wypełnienia:</strong></td>
-                                            <td>{{ analysis.embroidery_parameters.fill_pattern }}</td>
-                                        </tr>
+                                <h6 class="text-primary mb-3"><i class="fas fa-cog me-2"></i>Ustawienia zaawansowane</h6>
+                                <div class="mb-3">
+                                    {% for key, value in analysis.embroidery_parameters.items() %}
+                                        {% if key in ['thread_weight', 'machine_speed', 'needle_size', 'hoop_size', 'auto_underlay', 'thread_tension'] and value and value != 'Unknown' %}
+                                        <div class="border-start border-primary ps-3 mb-2">
+                                            <strong>
+                                                {% if key == 'thread_weight' %}Waga nici:
+                                                {% elif key == 'machine_speed' %}Prędkość maszyny:
+                                                {% elif key == 'needle_size' %}Rozmiar igły:
+                                                {% elif key == 'hoop_size' %}Rozmiar tamborka:
+                                                {% elif key == 'auto_underlay' %}Automatyczny podkład:
+                                                {% elif key == 'thread_tension' %}Naprężenie nici:
+                                                {% else %}{{ key|title }}:
+                                                {% endif %}
+                                            </strong><br>
+                                            <span class="text-primary">{{ value }}</span>
+                                        </div>
                                         {% endif %}
-                                        {% if analysis.embroidery_parameters.stitch_angle != 'Unknown' %}
-                                        <tr>
-                                            <td><strong>Kąt ściegów:</strong></td>
-                                            <td>{{ analysis.embroidery_parameters.stitch_angle }}</td>
-                                        </tr>
-                                        {% endif %}
-                                        {% if analysis.embroidery_parameters.outline_width != 'Unknown' %}
-                                        <tr>
-                                            <td><strong>Szerokość obrysu:</strong></td>
-                                            <td>{{ analysis.embroidery_parameters.outline_width }}</td>
-                                        </tr>
-                                        {% endif %}
-                                    </table>
+                                    {% endfor %}
                                 </div>
                             </div>
                         </div>
+                        
+                        <!-- Informacje dodatkowe -->
+                        {% if analysis.embroidery_parameters.estimated_time_medium or analysis.embroidery_parameters.detected_software %}
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    <h6 class="alert-heading"><i class="fas fa-info-circle me-2"></i>Dodatkowe informacje</h6>
+                                    {% if analysis.embroidery_parameters.estimated_time_medium %}
+                                        <p class="mb-1"><strong>Szacowany czas haftu:</strong> {{ analysis.embroidery_parameters.estimated_time_medium }}</p>
+                                    {% endif %}
+                                    {% if analysis.embroidery_parameters.detected_software %}
+                                        <p class="mb-1"><strong>Wykryte oprogramowanie:</strong> {{ analysis.embroidery_parameters.detected_software }}</p>
+                                    {% endif %}
+                                    {% if analysis.embroidery_parameters.complexity %}
+                                        <p class="mb-0"><strong>Złożoność wzoru:</strong> {{ analysis.embroidery_parameters.complexity }}</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
                         
                         <!-- Alternative Analysis Results -->
                         {% if analysis.embroidery_parameters.alternative_analysis %}
