@@ -62,6 +62,14 @@ This is a Flask-based web application that allows users to upload and analyze em
       - Extended parameter chunk analysis from 32 to 64 bytes
       - Added advanced parameters: thread weight, needle size, fabric type, hoop size, stabilizer type
       - Improved clustering algorithms with 5cm distance threshold and 5-point analysis window
+    - **Complete Pattern Detection Algorithm (July 16, 2025):** Advanced pattern recognition:
+      - Implemented detection of complete embroidery patterns instead of individual objects
+      - Added spatial analysis for grouping objects into full patterns (4cm separation threshold)
+      - Enhanced embroidery sequence detection with start-fill-finish analysis
+      - Pattern structure analysis based on stitch density and concentration
+      - Multi-method approach: spatial grouping, command sequence, and density analysis
+      - Minimum pattern size increased to 60-100 stitches for complete patterns
+      - Smart pattern selection prioritizing complete patterns over fragments
 
 Note: Some .pxf variants (like PMLPXF format) may not be fully supported by pyembroidery and users are advised to convert such files to more compatible formats like .dst, .pes, or .jef.
 

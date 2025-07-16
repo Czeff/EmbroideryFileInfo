@@ -597,9 +597,10 @@ class PXFAnalyzer:
         if coordinates:
             stitch_data['coordinate_count'] = len(coordinates)
             
-            # Wykrywanie wielu wzorów przez analizę przeskoków
-            patterns = self._detect_multiple_patterns(coordinates)
+            # Wykrywanie kompletnych wzorów haftu (nie pojedynczych obiektów)
+            patterns = self._detect_complete_embroidery_patterns(coordinates)
             stitch_data['patterns_detected'] = len(patterns)
+            stitch_data['pattern_type'] = 'kompletne wzory haftu' if len(patterns) > 1 else 'pojedynczy wzór'
             
             if len(patterns) > 1:
                 stitch_data['multi_pattern_warning'] = True
@@ -627,6 +628,159 @@ class PXFAnalyzer:
                 stitch_data.update(pattern_info)
         
         return stitch_data
+    
+    def _detect_complete_embroidery_patterns(self, coordinates: List[Tuple[int, int, int]]) -> List[List[Tuple[int, int, int]]]:
+        """Wykrywa kompletne wzory haftu, a nie pojedyncze obiekty"""
+        if len(coordinates) < 50:
+            return [coordinates]
+        
+        # Metoda 1: Analiza przestrzenna - grupowanie w kompletne wzory
+        spatial_patterns = self._group_into_complete_patterns(coordinates)
+        
+        # Metoda 2: Analiza na podstawie sekwencji haftu
+        sequence_patterns = self._detect_by_embroidery_sequence(coordinates)
+        
+        # Metoda 3: Analiza gęstości i struktury
+        density_patterns = self._detect_by_pattern_structure(coordinates)
+        
+        # Wybierz najlepszy wynik (kompletne wzory, nie za dużo fragmentów)
+        all_methods = [spatial_patterns, sequence_patterns, density_patterns]
+        valid_methods = [p for p in all_methods if 1 <= len(p) <= 10]  # 1-10 wzorów to realistyczne
+        
+        if valid_methods:
+            # Preferuj mniej wzorów ale bardziej kompletnych
+            best_patterns = min(valid_methods, key=len) if len(valid_methods) > 1 else valid_methods[0]
+            return best_patterns
+        
+        return [coordinates]  # Jeden kompletny wzór
+    
+    def _group_into_complete_patterns(self, coordinates: List[Tuple[int, int, int]]) -> List[List[Tuple[int, int, int]]]:
+        """Grupuje obiekty w kompletne wzory haftu na podstawie bliskości przestrzennej"""
+        if len(coordinates) < 100:
+            return [coordinates]
+        
+        patterns = []
+        current_pattern = []
+        
+        # Parametry dla kompletnych wzorów (nie pojedynczych obiektów)
+        pattern_separation_threshold = 4000  # 4cm - odległość między wzorami
+        min_pattern_size = 80  # Minimum ściegów dla kompletnego wzoru
+        
+        for i, (x, y, cmd) in enumerate(coordinates):
+            if not current_pattern:
+                current_pattern = [(x, y, cmd)]
+                continue
+            
+            # Sprawdź czy punkt należy do aktualnego wzoru czy zaczyna nowy
+            recent_points = current_pattern[-20:]  # Ostatnie 20 punktów
+            distances = [((x - px)**2 + (y - py)**2)**0.5 for px, py, _ in recent_points]
+            min_distance = min(distances) if distances else float('inf')
+            
+            # Jeśli punkt jest daleko od ostatnich punktów w wzorze
+            if min_distance > pattern_separation_threshold and len(current_pattern) >= min_pattern_size:
+                patterns.append(current_pattern)
+                current_pattern = [(x, y, cmd)]
+            else:
+                current_pattern.append((x, y, cmd))
+        
+        # Dodaj ostatni wzór
+        if current_pattern and len(current_pattern) >= min_pattern_size:
+            patterns.append(current_pattern)
+        
+        return patterns if len(patterns) > 1 else [coordinates]
+    
+    def _detect_by_embroidery_sequence(self, coordinates: List[Tuple[int, int, int]]) -> List[List[Tuple[int, int, int]]]:
+        """Wykrywa wzory na podstawie sekwencji typowej dla haftu (start-fill-finish)"""
+        patterns = []
+        current_pattern = []
+        
+        for i, (x, y, cmd) in enumerate(coordinates):
+            current_pattern.append((x, y, cmd))
+            
+            # Wykryj komendy końca wzoru
+            if cmd in [0x8003, 0x8013, 0x8023, 0x8033, 0x0001]:  # Różne komendy końca
+                if len(current_pattern) >= 60:  # Kompletny wzór ma więcej ściegów
+                    patterns.append(current_pattern)
+                current_pattern = []
+            
+            # Wykryj bardzo długie skoki (prawdopodobnie nowy wzór)
+            elif i > 0 and i < len(coordinates) - 1:
+                prev_x, prev_y, _ = coordinates[i-1]
+                next_x, next_y, _ = coordinates[i+1] if i+1 < len(coordinates) else (x, y, 0)
+                
+                jump_to_current = ((x - prev_x)**2 + (y - prev_y)**2)**0.5
+                jump_from_current = ((next_x - x)**2 + (next_y - y)**2)**0.5
+                
+                # Duży skok in + duży skok out = prawdopodobnie koniec wzoru
+                if (jump_to_current > 5000 and jump_from_current > 3000 and 
+                    len(current_pattern) >= 80):
+                    patterns.append(current_pattern[:-1])  # Bez punktu skoku
+                    current_pattern = [(x, y, cmd)]
+        
+        if current_pattern and len(current_pattern) >= 40:
+            patterns.append(current_pattern)
+        
+        return patterns if len(patterns) > 1 else [coordinates]
+    
+    def _detect_by_pattern_structure(self, coordinates: List[Tuple[int, int, int]]) -> List[List[Tuple[int, int, int]]]:
+        """Wykrywa wzory na podstawie struktury haftu (obszary wypełnione vs granice)"""
+        if len(coordinates) < 200:
+            return [coordinates]
+        
+        # Analizuj gęstość ściegów w różnych obszarach
+        patterns = []
+        window_size = 100  # Okno analizy
+        
+        i = 0
+        while i < len(coordinates):
+            pattern_start = i
+            current_density = self._calculate_local_density(coordinates[i:i+window_size])
+            
+            # Szukaj końca wzoru (spadek gęstości + duża odległość)
+            j = i + window_size
+            while j < len(coordinates) - window_size:
+                next_density = self._calculate_local_density(coordinates[j:j+window_size])
+                
+                # Sprawdź czy jest duży skok
+                if j > 0:
+                    curr_x, curr_y, _ = coordinates[j]
+                    prev_x, prev_y, _ = coordinates[j-1]
+                    jump_distance = ((curr_x - prev_x)**2 + (curr_y - prev_y)**2)**0.5
+                    
+                    # Koniec wzoru: spadek gęstości + duży skok
+                    if (next_density < current_density * 0.5 and 
+                        jump_distance > 3500 and 
+                        j - pattern_start >= 100):
+                        
+                        pattern = coordinates[pattern_start:j]
+                        if len(pattern) >= 60:
+                            patterns.append(pattern)
+                        i = j
+                        break
+                
+                j += 50  # Przesuwaj okno
+            else:
+                # Koniec danych - dodaj resztę jako wzór
+                pattern = coordinates[pattern_start:]
+                if len(pattern) >= 60:
+                    patterns.append(pattern)
+                break
+        
+        return patterns if len(patterns) > 1 else [coordinates]
+    
+    def _calculate_local_density(self, coords_window: List[Tuple[int, int, int]]) -> float:
+        """Oblicza lokalną gęstość ściegów"""
+        if len(coords_window) < 2:
+            return 0.0
+        
+        x_coords = [c[0] for c in coords_window]
+        y_coords = [c[1] for c in coords_window]
+        
+        width = max(x_coords) - min(x_coords)
+        height = max(y_coords) - min(y_coords)
+        area = max(width * height, 1)  # Unikaj dzielenia przez zero
+        
+        return len(coords_window) / area * 10000  # Normalizacja
     
     def _detect_multiple_patterns(self, coordinates: List[Tuple[int, int, int]]) -> List[List[Tuple[int, int, int]]]:
         """Wykrywa wiele wzorów na podstawie długich przeskoków i znaczników końca"""
